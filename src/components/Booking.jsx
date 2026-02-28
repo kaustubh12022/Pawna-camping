@@ -113,7 +113,7 @@ const Booking = () => {
             // ==========================================
             console.log("🚀 SENDING BOOKING PAYLOAD:", JSON.stringify(bookingPayload, null, 2));
 
-            const response = await fetch('http://localhost:5000/api/bookings', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

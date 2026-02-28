@@ -37,10 +37,10 @@ const OwnerDashboard = () => {
                 const dateQuery = selectedDate ? `?date=${selectedDate}` : '';
 
                 const [overviewRes, foodRes, packageRes, monthlyRes] = await Promise.all([
-                    fetch(`http://localhost:5000/api/analytics/overview${dateQuery}`, { headers }),
-                    fetch(`http://localhost:5000/api/analytics/food${dateQuery}`, { headers }),
-                    fetch(`http://localhost:5000/api/analytics/packages${dateQuery}`, { headers }),
-                    fetch(`http://localhost:5000/api/analytics/monthly`, { headers }) // Monthly ignores date picker
+                    fetch(`${import.meta.env.VITE_API_URL}/api/analytics/overview${dateQuery}`, { headers }),
+                    fetch(`${import.meta.env.VITE_API_URL}/api/analytics/food${dateQuery}`, { headers }),
+                    fetch(`${import.meta.env.VITE_API_URL}/api/analytics/packages${dateQuery}`, { headers }),
+                    fetch(`${import.meta.env.VITE_API_URL}/api/analytics/monthly`, { headers }) // Monthly ignores date picker
                 ]);
 
                 // TOKEN EXPIRY HANDLING

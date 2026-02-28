@@ -20,7 +20,7 @@ const ManagerDashboard = () => {
 
         try {
             setError(null);
-            const response = await fetch('http://localhost:5000/api/bookings', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -58,7 +58,7 @@ const ManagerDashboard = () => {
         if (!token) return navigate('/manager/login');
 
         try {
-            const response = await fetch(`http://localhost:5000/api/bookings/${id}/status`, {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings/${id}/status`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -91,7 +91,7 @@ const ManagerDashboard = () => {
         if (!token) return navigate('/manager/login');
 
         try {
-            const response = await fetch(`http://localhost:5000/api/bookings/${id}`, {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`

@@ -15,7 +15,14 @@ const app = express();
 // MIDDLEWARE FOR JSON, URLENCODED DATA, AND CORS
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cors());
+
+// PRODUCTION & LOCALHOST CORS CONFIGURATION
+app.use(cors({
+    origin: [
+        "http://localhost:5173",
+        "https://pawna-camping.vercel.app"
+    ]
+}));
 
 // DEFINE ROUTES
 app.use('/api/auth', require('./routes/authRoutes'));
