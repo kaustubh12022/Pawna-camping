@@ -20,6 +20,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cors({
     origin: [
         "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://192.168.1.8:5174",
+        "http://192.168.1.8:5173",
         "https://pawna-camping.vercel.app"
     ]
 }));
@@ -27,6 +31,7 @@ app.use(cors({
 // DEFINE ROUTES
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/bookings', require('./routes/bookingRoutes'));
+app.use('/api/packages', require('./routes/packageRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/example', require('./routes/exampleRoutes'));
 
@@ -37,6 +42,6 @@ app.get('/', (req, res) => {
 
 // START SERVER
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`[ SUCCESS ] SERVER RUNNING IN ${process.env.NODE_ENV} MODE ON PORT ${PORT}`);
 });

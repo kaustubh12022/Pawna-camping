@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 const bookingSchema = new mongoose.Schema({
     packageType: {
         type: String,
-        enum: ['Normal Tent', 'Cottage', 'Luxury Cottage'],
         required: [true, 'Please select a package type']
     },
     checkIn: {

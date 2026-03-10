@@ -77,4 +77,34 @@ const loginUser = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser };
+// @desc    UPDATE PASSWORD (MANAGER ONLY)
+// @route   PUT /api/auth/update-password
+// @access  Private (Manager)
+const updatePassword = async (req, res) => {
+    try {
+        const { targetRole, newPassword } = req.body;
+
+        if (!targetRole || !newPassword) {
+            return res.status(400).json({ message: 'PLEASE PROVIDE TARGET ROLE AND NEW PASSWORD' });
+        }
+
+        if (targetRole !== 'manager' && targetRole !== 'owner') {
+            return res.status(400).json({ message: 'INVALID TARGET ROLE' });
+        }
+
+        const userToUpdate = await User.findOne({ role: targetRole });
+
+        if (!userToUpdate) {
+            return res.status(404).json({ message: `NO USER FOUND WITH ROLE ${targetRole}` });
+        }
+
+        userToUpdate.password = newPassword;
+        await userToUpdate.save();
+
+        res.status(200).json({ message: `${targetRole.toUpperCase()} PASSWORD UPDATED SUCCESSFULLY` });
+    } catch (error) {
+        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+    }
+};
+
+module.exports = { registerUser, loginUser, updatePassword };

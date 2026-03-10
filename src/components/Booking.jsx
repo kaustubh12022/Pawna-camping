@@ -1,13 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const packageNames = {
-    normal: 'Normal Tent',
-    cottage: 'Cottage', // ALIGNED EXACTLY WITH BACKEND ENUM
-    luxury: 'Luxury Cottage'
-};
-
 const Booking = () => {
+    const [availablePackages, setAvailablePackages] = useState([]);
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({
         checkIn: '',
@@ -44,6 +39,21 @@ const Booking = () => {
         };
         window.addEventListener('selectPackage', handleSelectPackage);
         return () => window.removeEventListener('selectPackage', handleSelectPackage);
+    }, []);
+
+    useEffect(() => {
+        const fetchPackages = async () => {
+            try {
+                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/packages`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setAvailablePackages(data);
+                }
+            } catch (err) {
+                console.error("Failed to load packages for booking form", err);
+            }
+        };
+        fetchPackages();
     }, []);
 
     const handleChange = (e) => {
@@ -96,7 +106,7 @@ const Booking = () => {
         const dominantFoodPreference = Number(formData.nonVegCount) > 0 ? 'Non-Veg' : 'Veg';
 
         const bookingPayload = {
-            packageType: packageNames[formData.packageType],
+            packageType: formData.packageType,
             checkIn: formData.checkIn,
             checkOut: formData.checkOut,
             guests: Number(formData.guests),
@@ -136,7 +146,7 @@ const Booking = () => {
             // ==========================================
             // WHATSAPP REDIRECT SECTION
             // ==========================================
-            const message = `🏕️ *New Booking Request!* 🌟\n\n📦 *Package:* ${packageNames[formData.packageType]}\n📅 *Dates:* ${formData.checkIn} to ${formData.checkOut}\n🌙 *Nights:* ${nights}\n\n👥 *Total Guests:* ${formData.guests}\n🥗 *Veg:* ${formData.vegCount} | 🍗 *Non-Veg:* ${formData.nonVegCount}\n\n👤 *Name:* ${formData.firstName} ${formData.lastName}\n📞 *Phone:* ${formData.phone}\n📧 *Email:* ${formData.email}\n\n✨ *Looking forward to an amazing stay!* ✨`;
+            const message = `🏕️ *New Booking Request!* 🌟\n\n📦 *Package:* ${formData.packageType}\n📅 *Dates:* ${formData.checkIn} to ${formData.checkOut}\n🌙 *Nights:* ${nights}\n\n👥 *Total Guests:* ${formData.guests}\n🥗 *Veg:* ${formData.vegCount} | 🍗 *Non-Veg:* ${formData.nonVegCount}\n\n👤 *Name:* ${formData.firstName} ${formData.lastName}\n📞 *Phone:* ${formData.phone}\n📧 *Email:* ${formData.email}\n\n✨ *Looking forward to an amazing stay!* ✨`;
 
             const encodedMessage = encodeURIComponent(message);
             const whatsappUrl = `https://wa.me/919975526627?text=${encodedMessage}`;
@@ -150,34 +160,34 @@ const Booking = () => {
     };
 
     return (
-        <section id="booking" className="py-24 md:py-32 bg-[#fafafa] px-6 lg:px-8">
+        <section id="booking" className="py-16 sm:py-24 md:py-32 bg-[#fafafa] px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl mx-auto">
 
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="text-center mb-16"
+                    className="text-center mb-8 sm:mb-16"
                 >
-                    <h2 className="text-4xl md:text-5xl font-semibold text-stone-900 mb-4 tracking-tight">Reserve Your Stay</h2>
-                    <p className="text-stone-500 font-light text-lg">Secure your spot in nature.</p>
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-stone-900 mb-3 sm:mb-4 tracking-tight">Reserve Your Stay</h2>
+                    <p className="text-stone-500 font-light text-base sm:text-lg">Secure your spot in nature.</p>
                 </motion.div>
 
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="bg-white rounded-3xl p-8 md:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-100"
+                    className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-100"
                 >
 
-                    <div className="flex justify-between items-center mb-12 relative">
+                    <div className="flex justify-between items-center mb-8 sm:mb-12 relative">
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-px bg-stone-100 z-0"></div>
                         {[1, 2, 3].map((num) => (
-                            <div key={num} className="relative z-10 flex flex-col items-center gap-2">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors duration-300 ${step >= num ? 'bg-stone-900 text-white shadow-xl scale-110' : 'bg-stone-100 text-stone-400'}`}>
+                            <div key={num} className="relative z-10 flex flex-col items-center gap-1.5 sm:gap-2">
+                                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium transition-colors duration-300 ${step >= num ? 'bg-stone-900 text-white shadow-xl scale-110' : 'bg-stone-100 text-stone-400'}`}>
                                     {num}
                                 </div>
-                                <span className={`text-xs font-medium tracking-wide uppercase hidden sm:block ${step >= num ? 'text-stone-900' : 'text-stone-400'}`}>
+                                <span className={`text-[10px] sm:text-xs font-medium tracking-wide uppercase ${step >= num ? 'text-stone-900' : 'text-stone-400'}`}>
                                     {num === 1 ? 'Details' : num === 2 ? 'Guests' : 'Confirm'}
                                 </span>
                             </div>
@@ -193,28 +203,28 @@ const Booking = () => {
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-6"
+                                    className="space-y-4 sm:space-y-6"
                                     onSubmit={nextStep}
                                 >
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-stone-700">Check-in Date</label>
-                                            <input type="date" name="checkIn" value={formData.checkIn} onChange={handleChange} className="w-full px-5 py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light" required />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                                        <div className="space-y-1.5 sm:space-y-2">
+                                            <label className="text-xs sm:text-sm font-medium text-stone-700">Check-in Date</label>
+                                            <input type="date" name="checkIn" value={formData.checkIn} onChange={handleChange} className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light text-sm sm:text-base" required />
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-stone-700">Check-out Date</label>
-                                            <input type="date" name="checkOut" value={formData.checkOut} onChange={handleChange} min={formData.checkIn ? new Date(new Date(formData.checkIn).setDate(new Date(formData.checkIn).getDate() + 1)).toISOString().split('T')[0] : undefined} className="w-full px-5 py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light" required />
+                                        <div className="space-y-1.5 sm:space-y-2">
+                                            <label className="text-xs sm:text-sm font-medium text-stone-700">Check-out Date</label>
+                                            <input type="date" name="checkOut" value={formData.checkOut} onChange={handleChange} min={formData.checkIn ? new Date(new Date(formData.checkIn).setDate(new Date(formData.checkIn).getDate() + 1)).toISOString().split('T')[0] : undefined} className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light text-sm sm:text-base" required />
                                         </div>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-stone-700">Select Package</label>
+                                    <div className="space-y-1.5 sm:space-y-2">
+                                        <label className="text-xs sm:text-sm font-medium text-stone-700">Select Package</label>
                                         <div className="relative">
-                                            <select name="packageType" value={formData.packageType} onChange={handleChange} className="w-full px-5 py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light appearance-none" required>
+                                            <select name="packageType" value={formData.packageType} onChange={handleChange} className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light appearance-none text-sm sm:text-base" required>
                                                 <option value="" disabled>Choose your experience...</option>
-                                                <option value="normal">Normal Tent</option>
-                                                <option value="cottage">Cozy Cottage</option>
-                                                <option value="luxury">Luxury Cottage</option>
+                                                {availablePackages.map(pkg => (
+                                                    <option key={pkg._id} value={pkg.title}>{pkg.title}</option>
+                                                ))}
                                             </select>
                                             <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-stone-400">
                                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -233,7 +243,7 @@ const Booking = () => {
                                         </motion.div>
                                     )}
 
-                                    <button type="submit" className="w-full py-4 mt-8 bg-stone-900 text-white rounded-xl text-sm font-medium tracking-wide hover:bg-stone-800 transition-all hover:shadow-xl active:scale-[0.98]">
+                                    <button type="submit" className="w-full py-3.5 sm:py-4 mt-6 sm:mt-8 bg-stone-900 text-white rounded-xl text-xs sm:text-sm font-medium tracking-wide hover:bg-stone-800 transition-all hover:shadow-xl active:scale-[0.98]">
                                         CONTINUE TO GUEST DETAILS
                                     </button>
                                 </motion.form>
@@ -245,53 +255,53 @@ const Booking = () => {
                                     initial={{ opacity: 0, x: 20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-6"
+                                    className="space-y-4 sm:space-y-6"
                                     onSubmit={nextStep}
                                 >
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-stone-700">Number of Guests</label>
-                                        <input type="number" name="guests" min="1" value={formData.guests} onChange={handleChange} className="w-full px-5 py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light" required />
+                                    <div className="space-y-1.5 sm:space-y-2">
+                                        <label className="text-xs sm:text-sm font-medium text-stone-700">Number of Guests</label>
+                                        <input type="number" name="guests" min="1" value={formData.guests} onChange={handleChange} className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light text-sm sm:text-base" required />
                                     </div>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-2 gap-6 bg-stone-50/50 p-6 rounded-2xl border border-stone-100">
-                                        <div className="col-span-2 text-sm text-stone-500 font-medium mb-[-12px]">Meal Preferences (Must total {formData.guests})</div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-green-700">🥗 Veg Meals</label>
-                                            <input type="number" name="vegCount" min="0" value={formData.vegCount} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-green-200 focus:outline-none focus:ring-2 focus:ring-green-600/20 focus:border-green-600 transition-all bg-white font-light" required />
+                                    <div className="grid grid-cols-2 gap-4 sm:gap-6 bg-stone-50/50 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-stone-100">
+                                        <div className="col-span-2 text-xs sm:text-sm text-stone-500 font-medium mb-[-8px] sm:mb-[-12px]">Meal Preferences (Must total {formData.guests})</div>
+                                        <div className="space-y-1.5 sm:space-y-2">
+                                            <label className="text-xs sm:text-sm font-medium text-green-700">🥗 Veg Meals</label>
+                                            <input type="number" name="vegCount" min="0" value={formData.vegCount} onChange={handleChange} className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-green-200 focus:outline-none focus:ring-2 focus:ring-green-600/20 focus:border-green-600 transition-all bg-white font-light text-sm sm:text-base" required />
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-orange-700">🍗 Non-Veg Meals</label>
-                                            <input type="number" name="nonVegCount" min="0" value={formData.nonVegCount} onChange={handleChange} className="w-full px-4 py-3 rounded-xl border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 transition-all bg-white font-light" required />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-stone-700">First Name</label>
-                                            <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="John" className="w-full px-5 py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light" required />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-stone-700">Last Name</label>
-                                            <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Doe" className="w-full px-5 py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light" required />
+                                        <div className="space-y-1.5 sm:space-y-2">
+                                            <label className="text-xs sm:text-sm font-medium text-orange-700">🍗 Non-Veg Meals</label>
+                                            <input type="number" name="nonVegCount" min="0" value={formData.nonVegCount} onChange={handleChange} className="w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-600/20 focus:border-orange-600 transition-all bg-white font-light text-sm sm:text-base" required />
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-stone-700">Email Address</label>
-                                            <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="john@example.com" className="w-full px-5 py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light" required />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                                        <div className="space-y-1.5 sm:space-y-2">
+                                            <label className="text-xs sm:text-sm font-medium text-stone-700">First Name</label>
+                                            <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="John" className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light text-sm sm:text-base" required />
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-medium text-stone-700">Phone Number</label>
-                                            <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="+91 98765 43210" className="w-full px-5 py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light" required />
+                                        <div className="space-y-1.5 sm:space-y-2">
+                                            <label className="text-xs sm:text-sm font-medium text-stone-700">Last Name</label>
+                                            <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Doe" className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light text-sm sm:text-base" required />
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-4 mt-8">
-                                        <button type="button" onClick={prevStep} className="w-1/3 py-4 border border-stone-200 text-stone-900 rounded-xl text-sm font-medium tracking-wide hover:bg-stone-50 transition-colors active:scale-[0.98]">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                                        <div className="space-y-1.5 sm:space-y-2">
+                                            <label className="text-xs sm:text-sm font-medium text-stone-700">Email Address</label>
+                                            <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="john@example.com" className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light text-sm sm:text-base" required />
+                                        </div>
+                                        <div className="space-y-1.5 sm:space-y-2">
+                                            <label className="text-xs sm:text-sm font-medium text-stone-700">Phone Number</label>
+                                            <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="+91 98765 43210" className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-900/20 focus:border-stone-900 transition-all bg-stone-50/50 hover:bg-stone-50 font-light text-sm sm:text-base" required />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3 sm:gap-4 mt-6 sm:mt-8">
+                                        <button type="button" onClick={prevStep} className="w-1/3 py-3.5 sm:py-4 border border-stone-200 text-stone-900 rounded-xl text-xs sm:text-sm font-medium tracking-wide hover:bg-stone-50 transition-colors active:scale-[0.98]">
                                             BACK
                                         </button>
-                                        <button type="submit" className="w-2/3 py-4 bg-stone-900 text-white rounded-xl text-sm font-medium tracking-wide hover:bg-stone-800 transition-all hover:shadow-xl active:scale-[0.98]">
+                                        <button type="submit" className="w-2/3 py-3.5 sm:py-4 bg-stone-900 text-white rounded-xl text-xs sm:text-sm font-medium tracking-wide hover:bg-stone-800 transition-all hover:shadow-xl active:scale-[0.98]">
                                             REVIEW BOOKING
                                         </button>
                                     </div>
@@ -316,10 +326,10 @@ const Booking = () => {
                                         Please review your details carefully before confirming your stay.
                                     </p>
 
-                                    <div className="px-6 py-8 bg-stone-50/80 backdrop-blur-sm rounded-3xl text-left space-y-5 mb-10 border border-stone-100 shadow-sm">
+                                    <div className="px-4 sm:px-6 py-5 sm:py-8 bg-stone-50/80 backdrop-blur-sm rounded-2xl sm:rounded-3xl text-left space-y-4 sm:space-y-5 mb-8 sm:mb-10 border border-stone-100 shadow-sm">
                                         <div className="flex items-center justify-between border-b border-stone-200/60 pb-5">
                                             <span className="text-sm font-medium text-stone-500 flex items-center gap-2"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> Package</span>
-                                            <span className="text-sm text-stone-900 font-medium">{packageNames[formData.packageType]}</span>
+                                            <span className="text-sm text-stone-900 font-medium">{formData.packageType}</span>
                                         </div>
                                         <div className="flex items-center justify-between border-b border-stone-200/60 pb-5">
                                             <span className="text-sm font-medium text-stone-500 flex items-center gap-2"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> Dates</span>
@@ -333,6 +343,7 @@ const Booking = () => {
                                             <span className="text-sm font-medium text-stone-500 flex items-center gap-2"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg> Meals ({formData.guests})</span>
                                             <span className="text-sm text-stone-900 font-medium">{formData.vegCount} Veg, {formData.nonVegCount} Non-Veg</span>
                                         </div>
+
                                         <div className="flex items-center justify-between">
                                             <span className="text-sm font-medium text-stone-500 flex items-center gap-2"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> Primary Guest</span>
                                             <span className="text-sm text-stone-900 font-medium text-right">{formData.firstName} {formData.lastName}<br /><span className="text-xs text-stone-500 font-normal">{formData.phone}</span></span>
@@ -348,11 +359,11 @@ const Booking = () => {
                                         </div>
                                     )}
 
-                                    <div className="flex gap-4">
-                                        <button disabled={isLoading} type="button" onClick={prevStep} className="w-1/3 py-4 border border-stone-200 text-stone-900 rounded-xl text-sm font-medium tracking-wide hover:bg-stone-50 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
+                                    <div className="flex gap-3 sm:gap-4">
+                                        <button disabled={isLoading} type="button" onClick={prevStep} className="w-1/3 py-3.5 sm:py-4 border border-stone-200 text-stone-900 rounded-xl text-xs sm:text-sm font-medium tracking-wide hover:bg-stone-50 transition-colors active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
                                             EDIT
                                         </button>
-                                        <button disabled={isLoading} type="button" onClick={handleConfirmBooking} className="w-2/3 py-4 bg-[#25D366] text-white rounded-xl text-sm font-medium tracking-wide hover:bg-[#1DA851] transition-all hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:pointer-events-none">
+                                        <button disabled={isLoading} type="button" onClick={handleConfirmBooking} className="w-2/3 py-3.5 sm:py-4 bg-[#25D366] text-white rounded-xl text-xs sm:text-sm font-medium tracking-wide hover:bg-[#1DA851] transition-all hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:pointer-events-none">
                                             {isLoading ? (
                                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                                             ) : (

@@ -14,4 +14,30 @@ body {
   padding: 0;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide scrollbar for mobile swipe galleries */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area padding for iPhone notch/home indicator */
+.safe-bottom {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+/* Prevent iOS zoom on input focus */
+@media (max-width: 639px) {
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

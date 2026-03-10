@@ -1,14 +1,19 @@
 const Booking = require('../models/Booking');
+const Package = require('../models/Package');
 
 // ==========================================
 // CAPACITY VALIDATION LOGIC
 // ==========================================
 const checkCapacityOverlap = async (packageType, checkIn, checkOut) => {
-    // 1. Determine Max Capacity
+    // 1. Determine Max Capacity dynamically
     let maxCapacity = 0;
-    if (packageType === 'Cottage') maxCapacity = 5;
-    else if (packageType === 'Luxury Cottage') maxCapacity = 3;
-    else return true; // Tents are unlimited, skip check
+    const pkg = await Package.findOne({ title: packageType });
+
+    if (pkg && pkg.maxCapacity > 0) {
+        maxCapacity = pkg.maxCapacity;
+    } else {
+        return true; // Assume unlimited if not found or set to 0
+    }
 
     // 2. Query for OVERLAP DETECTION using CONFIRMED BOOKINGS FILTER
     // An overlap occurs if the existing booking's duration intersects with the new duration.
