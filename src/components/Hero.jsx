@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 
 const Hero = () => {
     return (
@@ -44,9 +45,9 @@ const Hero = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 1.2, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 >
-                    <a href="#booking" className="inline-block bg-white/90 backdrop-blur-md text-stone-900 px-8 py-4 sm:px-10 sm:py-5 rounded-full text-xs sm:text-sm font-bold tracking-widest uppercase hover:bg-white hover:scale-105 transition-all duration-500 shadow-2xl">
+                    <Link to="/booking" className="inline-block bg-white/90 backdrop-blur-md text-stone-900 px-8 py-4 sm:px-10 sm:py-5 rounded-full text-xs sm:text-sm font-bold tracking-widest uppercase hover:bg-white hover:scale-105 transition-all duration-500 shadow-2xl">
                         Reserve Your Stay
-                    </a>
+                    </Link>
                 </motion.div>
             </div>
 

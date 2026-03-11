@@ -34,6 +34,7 @@ app.use('/api/bookings', require('./routes/bookingRoutes'));
 app.use('/api/packages', require('./routes/packageRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/example', require('./routes/exampleRoutes'));
+app.use('/api/settings', require('./routes/settingsRoutes'));
 
 // BASIC ROOT ROUTE ALIVE CHECK
 app.get('/', (req, res) => {

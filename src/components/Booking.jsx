@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Booking = () => {
+    const [searchParams] = useSearchParams();
     const [availablePackages, setAvailablePackages] = useState([]);
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({
@@ -19,6 +21,7 @@ const Booking = () => {
     const [nights, setNights] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [apiError, setApiError] = useState(null);
+    const [whatsappNumber, setWhatsappNumber] = useState('919975526627');
 
     useEffect(() => {
         if (formData.checkIn && formData.checkOut) {
@@ -55,6 +58,30 @@ const Booking = () => {
         };
         fetchPackages();
     }, []);
+
+    // Fetch WhatsApp number from settings API
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.whatsappNumber) setWhatsappNumber(data.whatsappNumber);
+                }
+            } catch (err) {
+                console.error('Failed to fetch WhatsApp settings', err);
+            }
+        };
+        fetchSettings();
+    }, []);
+
+    // Read ?package= query param for pre-selection
+    useEffect(() => {
+        const pkgParam = searchParams.get('package');
+        if (pkgParam) {
+            setFormData(prev => ({ ...prev, packageType: pkgParam }));
+        }
+    }, [searchParams]);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -149,7 +176,7 @@ const Booking = () => {
             const message = `🏕️ *New Booking Request!* 🌟\n\n📦 *Package:* ${formData.packageType}\n📅 *Dates:* ${formData.checkIn} to ${formData.checkOut}\n🌙 *Nights:* ${nights}\n\n👥 *Total Guests:* ${formData.guests}\n🥗 *Veg:* ${formData.vegCount} | 🍗 *Non-Veg:* ${formData.nonVegCount}\n\n👤 *Name:* ${formData.firstName} ${formData.lastName}\n📞 *Phone:* ${formData.phone}\n📧 *Email:* ${formData.email}\n\n✨ *Looking forward to an amazing stay!* ✨`;
 
             const encodedMessage = encodeURIComponent(message);
-            const whatsappUrl = `https://wa.me/919975526627?text=${encodedMessage}`;
+            const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
             window.open(whatsappUrl, '_blank');
 
         } catch (error) {

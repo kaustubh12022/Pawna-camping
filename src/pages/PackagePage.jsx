@@ -8,6 +8,7 @@ const PackagePage = () => {
     const [pkg, setPkg] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [activeImage, setActiveImage] = useState(0);
+    const [whatsappNumber, setWhatsappNumber] = useState('919975526627');
 
     useEffect(() => {
         const fetchPackage = async () => {
@@ -28,12 +29,23 @@ const PackagePage = () => {
         fetchPackage();
     }, [slug]);
 
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.whatsappNumber) setWhatsappNumber(data.whatsappNumber);
+                }
+            } catch (err) {
+                console.error('Failed to fetch settings', err);
+            }
+        };
+        fetchSettings();
+    }, []);
+
     const handleBookNow = () => {
-        window.dispatchEvent(new CustomEvent('selectPackage', { detail: pkg.title }));
-        navigate('/');
-        setTimeout(() => {
-            document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth' });
-        }, 300);
+        navigate(`/booking?package=${encodeURIComponent(pkg.title)}`);
     };
 
     if (isLoading) {
@@ -253,7 +265,7 @@ const PackagePage = () => {
                             <div className="mt-4 bg-white rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-100 text-center">
                                 <p className="text-sm text-stone-500 font-light mb-3">Have questions about this accommodation?</p>
                                 <a
-                                    href="https://wa.me/919975526627"
+                                    href={`https://wa.me/${whatsappNumber}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center gap-2 text-[#25D366] font-medium text-sm hover:underline"
