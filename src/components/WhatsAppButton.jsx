@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 
 const WhatsAppButton = () => {
     const [whatsappNumber, setWhatsappNumber] = useState('919975526627');
+    const location = useLocation();
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -22,6 +24,9 @@ const WhatsAppButton = () => {
     const handleClick = () => {
         window.open(`https://wa.me/${whatsappNumber}`, '_blank');
     };
+
+    const isPublicRoute = !location.pathname.startsWith('/manager') && !location.pathname.startsWith('/owner');
+    if (!isPublicRoute) return null;
 
     return (
         <motion.button

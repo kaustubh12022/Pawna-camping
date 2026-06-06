@@ -56,9 +56,10 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
+        const normalizedEmail = email?.trim().toLowerCase();
 
         // CHECK FOR USER BY EMAIL
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: normalizedEmail });
 
         // IF USER EXISTS AND COMBINATION MATCHES 
         if (user && (await user.matchPassword(password))) {
@@ -77,34 +78,62 @@ const loginUser = async (req, res) => {
     }
 };
 
-// @desc    UPDATE PASSWORD (MANAGER ONLY)
+// @desc    UPDATE PASSWORD — PER-USER (PHASE 3 UPDATE)
 // @route   PUT /api/auth/update-password
 // @access  Private (Manager)
+// Accepts: { userId: ObjectId, newPassword: string }
+//       OR: { email: string, newPassword: string }
+// Phase 3 replaces the old per-role implementation which assumed one user per role.
+// Manager can reset any user's password; the ownerRoutes has a dedicated per-owner endpoint too.
 const updatePassword = async (req, res) => {
     try {
-        const { targetRole, newPassword } = req.body;
+        const { userId, email, newPassword } = req.body;
 
-        if (!targetRole || !newPassword) {
-            return res.status(400).json({ message: 'PLEASE PROVIDE TARGET ROLE AND NEW PASSWORD' });
+        if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({ message: 'New password must be at least 6 characters' });
         }
 
-        if (targetRole !== 'manager' && targetRole !== 'owner') {
-            return res.status(400).json({ message: 'INVALID TARGET ROLE' });
+        if (!userId && !email) {
+            return res.status(400).json({ message: 'Please provide either userId or email to identify the target user' });
         }
 
-        const userToUpdate = await User.findOne({ role: targetRole });
+        // ---- FIND TARGET USER ----
+        let userToUpdate;
+        if (userId) {
+            userToUpdate = await User.findById(userId);
+        } else {
+            userToUpdate = await User.findOne({ email: email.trim().toLowerCase() });
+        }
 
         if (!userToUpdate) {
-            return res.status(404).json({ message: `NO USER FOUND WITH ROLE ${targetRole}` });
+            return res.status(404).json({ message: 'USER NOT FOUND' });
         }
 
+        // ---- UPDATE PASSWORD (pre-save hook hashes it) ----
         userToUpdate.password = newPassword;
         await userToUpdate.save();
 
-        res.status(200).json({ message: `${targetRole.toUpperCase()} PASSWORD UPDATED SUCCESSFULLY` });
+        res.status(200).json({
+            message: `Password updated successfully for ${userToUpdate.name} (${userToUpdate.role})`
+        });
     } catch (error) {
         res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
     }
 };
 
-module.exports = { registerUser, loginUser, updatePassword };
+// @desc    GET CURRENT USER PROFILE (WITH ASSIGNED PROPERTIES)
+// @route   GET /api/auth/me
+// @access  Private
+const getMe = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id).select('-password').populate('properties', 'name type slug location pricing images coverImage googleMapsLink');
+        if (!user) {
+            return res.status(404).json({ message: 'USER NOT FOUND' });
+        }
+        res.status(200).json(user);
+    } catch (error) {
+        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+    }
+};
+
+module.exports = { registerUser, loginUser, updatePassword, getMe };

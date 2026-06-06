@@ -1,0 +1,79 @@
+Created At: 2026-05-27T08:31:53Z
+Completed At: 2026-05-27T08:31:53Z
+File Path: `file:///c:/Users/kalek/OneDrive/Desktop/Pawna+Villa/Pawna-camping/src/pages/OwnerDashboard.jsx`
+Total Lines: 799
+Total Bytes: 48920
+Showing lines 1 to 799
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: import { useState, useEffect } from 'react';
+2: import { useNavigate } from 'react-router-dom';
+3: import {
+4:     PieChart, Pie, Cell,
+5:     BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer,
+6:     LineChart, Line, CartesianGrid
+7: } from 'recharts';
+8: import {
+9:     LayoutDashboard,
+10:     CalendarCheck,
+11:     Tent,
+12:     MapPin,
+13:     Users,
+14:     ChevronDown,
+15:     LogOut,
+16:     Building2,
+17:     PieChart as PieChartIcon
+18: } from 'lucide-react';
+19: 
+20: const COLORS = ['#10b981', '#0ea5e9', '#f59e0b', '#8b5cf6'];
+21: const API = import.meta.env.VITE_API_URL || '';
+22: 
+23: const CustomTooltip = ({ active, payload, label }) => {
+24:     if (active && payload && payload.length) {
+25:         return (
+26:             <div className="bg-white p-3 border border-stone-100 shadow-xl rounded-xl">
+27:                 <p className="font-bold text-stone-800 text-sm mb-1">{label}</p>
+28:                 {payload.map((entry, index) => (
+29:                     <p key={index} className="text-sm font-medium" style={{ color: entry.color }}>
+30:                         {entry.name}: {entry.value}
+31:                     </p>
+32:                 ))}
+33:             </div>
+34:         );
+35:     }
+36:     return null;
+37: };
+38: 
+39: const OwnerDashboard = () => {
+40:     const [activeTab, setActiveTab] = useState('analytics');
+41:     const [ownerProfile, setOwnerProfile] = useState(null);
+42:     const [selectedProperty, setSelectedProperty] = useState('all');
+43:     
+44:     // Analytics State
+45:     cons
+<truncated 45282 bytes>
+lex flex-col md:flex-row md:items-center justify-between gap-4">
+727:                                 <div>
+728:                                     <p className="text-emerald-100 text-sm font-bold uppercase tracking-wider mb-1">Total Earnings (Shown)</p>
+729:                                     <p className="text-4xl font-black">₹{revenues.reduce((sum, r) => sum + r.ownerEarnings, 0).toLocaleString('en-IN')}</p>
+730:                                 </div>
+731:                                 <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/20 text-sm max-w-sm">
+732:                                     <p className="font-medium text-emerald-50">This shows your net earnings. Platform commission has already been deducted from these totals.</p>
+733:                                 </div>
+734:                             </div>
+735: 
+736:                             {revenuesLoading ? (
+737:                                 <div className="p-12 flex justify-center">
+738:                                     <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+739:                                 </div>
+740:                             ) : revenues.length === 0 ? (
+741:                                 <div className="p-16 flex flex-col items-center justify-center text-stone-400">
+742:                                     <PieChartIcon className="w-12 h-12 mb-3 opacity-20" />
+743:                                     <p className="font-bold text-stone-500">No revenue entries found.</p>
+744:                                 </div>
+745:                             ) : (
+746:                                 <div className="overflow-x-auto">
+747:                                     <table className="w-full text-left text-sm whitespace-nowrap">
+748:                                        
+<truncated 4147 bytes>
+
+NOTE: The output was truncated because it was too long. Use a more targeted query or a smaller range to get the information you need.

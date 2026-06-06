@@ -15,7 +15,7 @@ const Gallery = () => {
     const doubledItems = [...galleryItems, ...galleryItems];
 
     return (
-        <section className="py-16 sm:py-24 md:py-32 bg-white overflow-hidden">
+        <section id="gallery" className="py-16 sm:py-24 md:py-32 bg-[var(--listing-bg)] overflow-hidden transition-colors duration-500">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-10 sm:mb-16">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -24,15 +24,15 @@ const Gallery = () => {
                     transition={{ duration: 0.8 }}
                     className="text-center"
                 >
-                    <span className="text-stone-400 text-sm font-bold tracking-widest uppercase mb-3 sm:mb-4 block flex items-center justify-center gap-3">
-                        <div className="w-8 h-[1px] bg-stone-300"></div>
+                    <span className="text-[var(--listing-accent)] text-sm font-bold tracking-widest uppercase mb-3 sm:mb-4 flex items-center justify-center gap-3 transition-colors duration-500">
+                        <div className="w-8 h-[1px] bg-[var(--listing-border)] transition-colors duration-500"></div>
                         Gallery
-                        <div className="w-8 h-[1px] bg-stone-300"></div>
+                        <div className="w-8 h-[1px] bg-[var(--listing-border)] transition-colors duration-500"></div>
                     </span>
-                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-stone-900 mb-4 sm:mb-6 tracking-tight">
-                        Moments at <span className="italic font-light text-stone-500">Pawna</span>
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--listing-text-primary)] mb-4 sm:mb-6 tracking-tight transition-colors duration-500">
+                        Moments at <span className="italic font-light text-[var(--listing-text-secondary)] transition-colors duration-500">Lonavala</span>
                     </h2>
-                    <p className="text-stone-500 max-w-xl mx-auto text-base sm:text-lg font-light px-2">
+                    <p className="text-[var(--listing-text-secondary)] max-w-xl mx-auto text-base sm:text-lg font-light px-2 transition-colors duration-500">
                         A glimpse into the experiences that await you by the lakeside.
                     </p>
                 </motion.div>

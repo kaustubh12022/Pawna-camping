@@ -19,13 +19,13 @@ const BookingPage = () => {
     }, [preSelectedPackage]);
 
     return (
-        <div className="min-h-screen bg-[#fafafa]">
+        <div className="min-h-screen bg-[var(--listing-bg)] transition-colors duration-500">
             {/* Top Navigation */}
-            <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-stone-100">
+            <div className="sticky top-0 z-50 bg-[var(--listing-bg)]/80 backdrop-blur-xl border-b border-[var(--listing-border)] transition-colors duration-500">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
                     <button
                         onClick={() => navigate('/')}
-                        className="flex items-center gap-1.5 sm:gap-2 text-stone-600 hover:text-stone-900 transition-colors font-medium text-sm"
+                        className="flex items-center gap-1.5 sm:gap-2 text-[var(--listing-text-secondary)] hover:text-[var(--listing-accent)] transition-colors font-medium text-sm"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -33,7 +33,7 @@ const BookingPage = () => {
                         <span className="hidden sm:inline">Back to Home</span>
                         <span className="sm:hidden">Back</span>
                     </button>
-                    <h1 className="text-sm sm:text-base font-semibold text-stone-900 tracking-tight">Book Your Stay</h1>
+                    <h1 className="text-sm sm:text-base font-semibold text-[var(--listing-text-primary)] tracking-tight transition-colors duration-500">Book Your Stay</h1>
                     <div className="w-16" /> {/* Spacer for centering */}
                 </div>
             </div>
@@ -48,7 +48,7 @@ const BookingPage = () => {
                 <div className="absolute inset-0 bg-gradient-to-b from-stone-900/80 via-stone-900/60 to-stone-900/90 z-10" />
                 <img
                     src="/Pawna-Heart-Camp-01.webp"
-                    alt="Pawna Camping"
+                    alt="Lonavala Stays"
                     className="w-full h-40 sm:h-52 md:h-64 object-cover opacity-60"
                 />
                 <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">

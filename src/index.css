@@ -2,14 +2,38 @@
 
 @import "tailwindcss";
 
+:root {
+  --listing-bg: #fafafa;
+  --listing-card-bg: #ffffff;
+  --listing-text-primary: #1c1917;
+  --listing-text-secondary: #78716c;
+  --listing-accent: #25D366;
+  --listing-border: #f5f5f4;
+  --listing-badge-bg: rgba(255, 255, 255, 0.9);
+  --listing-badge-text: #1c1917;
+  --listing-input-bg: #ffffff;
+}
+
+[data-theme='villa'] {
+  --listing-bg: #020617; /* Very dark slate, almost black */
+  --listing-card-bg: #0f172a; /* Slate 900 */
+  --listing-text-primary: #f8fafc;
+  --listing-text-secondary: #94a3b8;
+  --listing-accent: #38bdf8; /* Sky 400 */
+  --listing-border: #1e293b;
+  --listing-badge-bg: rgba(15, 23, 42, 0.9);
+  --listing-badge-text: #f8fafc;
+  --listing-input-bg: #0f172a;
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   font-family: 'Outfit', sans-serif;
-  background-color: #fafafa;
-  color: #1a1a1a;
+  background-color: var(--listing-bg);
+  color: var(--listing-text-primary);
   margin: 0;
   padding: 0;
   overflow-x: hidden;

@@ -28,7 +28,7 @@ const Hero = () => {
                     transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
                     className="text-[2.75rem] sm:text-6xl md:text-8xl font-semibold text-white tracking-tight mb-5 sm:mb-8 drop-shadow-lg leading-[1.1]"
                 >
-                    Escape to <span className="italic font-light">Pawna</span>
+                    Escape to <span className="italic font-light">Lonavala</span> with Us!
                 </motion.h1>
 
                 <motion.p
@@ -37,7 +37,7 @@ const Hero = () => {
                     transition={{ duration: 1.2, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
                     className="text-base sm:text-xl md:text-2xl text-stone-100 font-light mb-8 sm:mb-12 max-w-2xl drop-shadow-md leading-relaxed"
                 >
-                    Discover tranquility by the lakeside. Premium camping experiences immersed in nature.
+                    Discover tranquility by the lakeside or luxury in our private villas. Premium experiences immersed in nature.
                 </motion.p>
 
                 <motion.div

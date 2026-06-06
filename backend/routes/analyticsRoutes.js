@@ -5,32 +5,56 @@ const {
     getOverviewAnalytics,
     getFoodAnalytics,
     getPackageAnalytics,
-    getMonthlyAnalytics
+    getMonthlyAnalytics,
+    getPropertyAnalytics   // PHASE 2: New
 } = require('../controllers/analyticsController');
 
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 // ==========================================
-// OWNER ONLY ROUTES
+// ALL ANALYTICS ROUTES REQUIRE JWT AUTH
 // ==========================================
-// ENFORCE JWT TOKEN AND STRICTLY 'owner' ROLE
 router.use(protect);
-router.use(authorize('owner'));
+
+// ==========================================
+// OWNER + MANAGER SHARED ROUTES (property-scoped)
+// ==========================================
+// Owners are auto-scoped in controller via resolvePropertyScope()
+// Managers can pass ?propertyId= or get all-properties data
+router.use(authorize('owner', 'manager'));
 
 // @route   GET /api/analytics/overview
-// @desc    Get total bookings and total guests
+// @desc    Total bookings, guests, nights
+// @query   date (optional), propertyId (optional for manager)
 router.get('/overview', getOverviewAnalytics);
 
 // @route   GET /api/analytics/food
-// @desc    Get distribution of Veg vs Non-veg
+// @desc    Veg vs Non-veg distribution
+// @query   date (optional), propertyId (optional)
 router.get('/food', getFoodAnalytics);
 
 // @route   GET /api/analytics/packages
-// @desc    Get distribution of package types
+// @desc    Package popularity breakdown
+// @query   date (optional), propertyId (optional)
 router.get('/packages', getPackageAnalytics);
 
 // @route   GET /api/analytics/monthly
-// @desc    Get chronological booking trends grouped by YYYY-MM
+// @desc    Monthly booking + guest trends (chronological)
+// @query   propertyId (optional), year (optional, defaults to current year)
 router.get('/monthly', getMonthlyAnalytics);
+
+// @route   GET /api/analytics/owner-revenue
+// @desc    Get owner revenue entries minus commission
+// @query   propertyId (optional), date (optional)
+router.get('/owner-revenue', require('../controllers/analyticsController').getOwnerRevenue);
+
+// ==========================================
+// MANAGER ONLY ROUTES
+// ==========================================
+
+// @route   GET /api/analytics/properties
+// @desc    Bookings grouped by property — for manager comparison view
+// @query   startDate, endDate (optional)
+router.get('/properties', authorize('manager'), getPropertyAnalytics);
 
 module.exports = router;

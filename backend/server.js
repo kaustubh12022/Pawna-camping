@@ -1,6 +1,8 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 const connectDB = require('./config/db');
 
 // LOAD ENVIRONMENT VARIABLES
@@ -15,30 +17,90 @@ const app = express();
 // MIDDLEWARE FOR JSON, URLENCODED DATA, AND CORS
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(helmet()); // Add Helmet for security headers
 
 // PRODUCTION & LOCALHOST CORS CONFIGURATION
-app.use(cors({
-    origin: [
+// Only allow requests from known frontend origins
+const allowedOrigins = process.env.NODE_ENV === 'production'
+    ? [
+        "https://pawna-camping.vercel.app",
+        "https://lonavala-stays.vercel.app",
+        process.env.FRONTEND_URL,
+    ].filter(Boolean)
+    : [
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
-        "http://192.168.1.8:5174",
+        "http://localhost:5176",
+        "http://localhost:5177",
         "http://192.168.1.8:5173",
-        "https://pawna-camping.vercel.app"
-    ]
+        "http://192.168.1.8:5174",
+        "http://192.168.1.11:5173",
+        "http://192.168.1.11:5174",
+        "http://192.168.1.12:5173",
+        "https://pawna-camping.vercel.app",
+        "https://lonavala-stays.vercel.app",
+        process.env.FRONTEND_URL,
+    ].filter(Boolean);
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (Postman, curl, server-to-server)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS: Origin ${origin} not allowed`));
+    },
+    credentials: true
 }));
+
+// ==========================================
+// RATE LIMITING — Public booking endpoint
+// ==========================================
+const bookingLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5,                    // Max 5 booking attempts per IP per 15 min
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        message: 'Too many booking requests from this IP. Please try again in 15 minutes.'
+    }
+});
 
 // DEFINE ROUTES
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/bookings', require('./routes/bookingRoutes'));
+
+// Apply rate limit ONLY to the public POST booking creation
+const bookingRoutes = require('./routes/bookingRoutes');
+app.post('/api/bookings', bookingLimiter); // Rate-limit public creation
+app.use('/api/bookings', bookingRoutes);
+
 app.use('/api/packages', require('./routes/packageRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
-app.use('/api/example', require('./routes/exampleRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
+app.use('/api/properties', require('./routes/propertyRoutes')); // Multi-property support
+app.use('/api/owners', require('./routes/ownerRoutes'));         // Owner management
+app.use('/api/revenue', require('./routes/revenueRoutes'));      // Revenue tracking & analytics
+app.use('/api/dashboard', require('./routes/dashboardRoutes')); // Server-side dashboard stats
+app.use('/api/reviews', require('./routes/reviewRoutes'));       // Public reviews
+app.use('/api/upload', require('./routes/uploadRoutes'));        // Cloudinary image upload
+app.use('/api/notifications', require('./routes/notificationRoutes')); // Web-push notifications
+app.use('/api/blocked-dates', require('./routes/blockedDateRoutes')); // Owner blocked dates
 
-// BASIC ROOT ROUTE ALIVE CHECK
+// HEALTH CHECK & ROOT ROUTE
 app.get('/', (req, res) => {
-    res.status(200).json({ message: 'PAWNA CAMPING API IS RUNNING...' });
+    res.status(200).json({ message: 'LONAVALA MULTI-PROPERTY API IS RUNNING...', status: 'ok' });
+});
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// GLOBAL ERROR HANDLER
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(err.status || 500).json({
+        message: err.message || 'Internal Server Error',
+        stack: process.env.NODE_ENV === 'production' ? null : err.stack,
+    });
 });
 
 // START SERVER

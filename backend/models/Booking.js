@@ -33,7 +33,7 @@ const bookingSchema = new mongoose.Schema({
     },
     foodPreference: {
         type: String,
-        enum: ['Veg', 'Non-Veg'],
+        enum: ['Veg', 'Non-Veg', 'N/A'],
         required: false // Relaxed for legacy compatibility
     },
     customerName: {
@@ -53,6 +53,34 @@ const bookingSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
         // NOT REQUIRED SO PUBLIC WEBSITE CAN CREATE ANONYMOUS BOOKING REQUESTS
+    },
+    // PHASE 2: Property linkage (optional — null for legacy bookings)
+    property: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Property',
+        default: null
+        // null = legacy booking created before multi-property support
+    },
+    propertyType: {
+        type: String,
+        enum: ['campsite', 'villa', null],
+        default: null
+        // Denormalized from Property.type for fast analytics queries
+    },
+    ownerResponse: {
+        status: {
+            type: String,
+            enum: ['pending', 'accepted', 'rejected'],
+            default: 'pending'
+        },
+        notes: {
+            type: String,
+            default: ''
+        },
+        respondedAt: {
+            type: Date,
+            default: null
+        }
     }
 }, {
     timestamps: true
