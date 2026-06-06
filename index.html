@@ -12,6 +12,20 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // PWA Standalone Redirect — runs BEFORE React loads
+      (function() {
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                        || window.navigator.standalone === true;
+        if (isStandalone && window.location.pathname === '/') {
+          var mt = null; var ot = null;
+          try { mt = localStorage.getItem('managerToken'); } catch(e) {}
+          try { ot = localStorage.getItem('ownerToken'); } catch(e) {}
+          if (mt) { window.location.replace('/manager'); return; }
+          if (ot) { window.location.replace('/owner'); return; }
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
     <script>
       window.addEventListener('beforeinstallprompt', (e) => {
