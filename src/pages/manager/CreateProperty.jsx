@@ -14,7 +14,7 @@ const CreateProperty = () => {
     const [error, setError] = useState('');
 
     const [formData, setFormData] = useState({
-        name: '', type: 'campsite', googleMapsLink: '', address: '',
+        name: '', type: 'campsite', location: '', googleMapsLink: '', address: '',
         shortDescription: '', description: '',
         basePrice: '', discountPrice: '', pricePer: 'night',
         maxGuests: 10, checkInTime: '2:00 PM', checkOutTime: '11:00 AM',
@@ -41,6 +41,7 @@ const CreateProperty = () => {
                     setFormData({
                         name: data.name || '',
                         type: data.type || 'campsite',
+                        location: data.location || '',
                         googleMapsLink: data.googleMapsLink || '',
                         address: data.address || '',
                         shortDescription: data.shortDescription || '',
@@ -124,6 +125,7 @@ const CreateProperty = () => {
         const payload = {
             name: formData.name,
             type: formData.type,
+            location: formData.location,
             googleMapsLink: formData.googleMapsLink,
             address: formData.address,
             shortDescription: formData.shortDescription,
@@ -232,6 +234,12 @@ const CreateProperty = () => {
                                 <input type="text" name="googleMapsLink" value={formData.googleMapsLink} onChange={handleInputChange} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all" placeholder="e.g. https://maps.app.goo.gl/..." />
                             </div>
                             <div>
+                                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Location / Village</label>
+                                <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all" placeholder="e.g. Pawna Lake" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="md:col-span-2">
                                 <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Full Address</label>
                                 <input type="text" name="address" value={formData.address} onChange={handleInputChange} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all" placeholder="e.g. Plot 45, Near Pawna Dam, Lonavala" />
                             </div>
@@ -271,14 +279,23 @@ const CreateProperty = () => {
                                     </span>
                                 ))}
                             </div>
-                            <input 
-                                type="text" 
-                                value={amenityInput} 
-                                onChange={(e) => setAmenityInput(e.target.value)} 
-                                onKeyDown={(e) => handleAddTag(e, 'amenity')}
-                                className="w-full md:w-1/2 px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] outline-none transition-all" 
-                                placeholder="Type amenity and press Enter (e.g. WiFi, Pool)" 
-                            />
+                            <div className="flex gap-2 w-full md:w-2/3">
+                                <input 
+                                    type="text" 
+                                    value={amenityInput} 
+                                    onChange={(e) => setAmenityInput(e.target.value)} 
+                                    onKeyDown={(e) => handleAddTag(e, 'amenity')}
+                                    className="flex-1 px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] outline-none transition-all" 
+                                    placeholder="Type amenity (e.g. WiFi, Pool)" 
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={(e) => handleAddTag({ key: 'Enter', preventDefault: () => {} }, 'amenity')}
+                                    className="px-6 py-3 bg-stone-200 text-stone-700 font-bold rounded-xl hover:bg-stone-300 transition-colors shrink-0 active:scale-95"
+                                >
+                                    Add
+                                </button>
+                            </div>
                         </div>
                     </section>
 
@@ -330,14 +347,23 @@ const CreateProperty = () => {
                                     </span>
                                 ))}
                             </div>
-                            <input 
-                                type="text" 
-                                value={ruleInput} 
-                                onChange={(e) => setRuleInput(e.target.value)} 
-                                onKeyDown={(e) => handleAddTag(e, 'rule')}
-                                className="w-full md:w-1/2 px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] outline-none transition-all" 
-                                placeholder="Type rule and press Enter (e.g. No loud music after 10PM)" 
-                            />
+                            <div className="flex gap-2 w-full md:w-2/3">
+                                <input 
+                                    type="text" 
+                                    value={ruleInput} 
+                                    onChange={(e) => setRuleInput(e.target.value)} 
+                                    onKeyDown={(e) => handleAddTag(e, 'rule')}
+                                    className="flex-1 px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] outline-none transition-all" 
+                                    placeholder="Type rule (e.g. No loud music after 10PM)" 
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={(e) => handleAddTag({ key: 'Enter', preventDefault: () => {} }, 'rule')}
+                                    className="px-6 py-3 bg-stone-200 text-stone-700 font-bold rounded-xl hover:bg-stone-300 transition-colors shrink-0 active:scale-95"
+                                >
+                                    Add
+                                </button>
+                            </div>
                         </div>
                     </section>
 

@@ -27,7 +27,10 @@ const ImageUploader = ({ images, setImages, coverImage, setCoverImage }) => {
                 body: formData
             });
 
-            if (!res.ok) throw new Error('Upload failed');
+            if (!res.ok) {
+                const errData = await res.json().catch(() => null);
+                throw new Error(errData?.message || `Upload failed with status ${res.status}`);
+            }
             const uploadedFiles = await res.json();
             
             // Map to image objects
@@ -51,7 +54,7 @@ const ImageUploader = ({ images, setImages, coverImage, setCoverImage }) => {
 
         } catch (error) {
             console.error('Error uploading:', error);
-            alert('Failed to upload images');
+            alert(`Failed to upload images: ${error.message}`);
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';

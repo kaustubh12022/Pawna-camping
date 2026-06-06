@@ -41,6 +41,12 @@ const propertySchema = new mongoose.Schema({
     },
 
     // ---- LOCATION ----
+    location: {
+        type: String,
+        default: '',
+        trim: true
+        // e.g. "Pawna Lake" or "Lonavala" (Used for search index)
+    },
     googleMapsLink: {
         type: String,
         trim: true
