@@ -1,5 +1,5 @@
-import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import React, { Suspense, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import PageLoader from './components/PageLoader';
 import WhatsAppButton from './components/WhatsAppButton';
@@ -58,10 +58,36 @@ const ConditionalWhatsApp = () => {
   return isPublic ? <WhatsAppButton /> : null;
 };
 
+// Redirect PWA users to their respective dashboards if they are logged in
+const PWARedirect = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        if (location.pathname !== '/') return;
+
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone || document.referrer.includes('android-app://');
+        
+        if (isStandalone) {
+            const hasManagerToken = localStorage.getItem('managerToken');
+            const hasOwnerToken = localStorage.getItem('ownerToken');
+            
+            if (hasManagerToken) {
+                navigate('/manager');
+            } else if (hasOwnerToken) {
+                navigate('/owner');
+            }
+        }
+    }, [location.pathname, navigate]);
+
+    return null;
+};
+
 function App() {
   return (
     <ErrorBoundary>
       <Router>
+        <PWARedirect />
         <ConditionalWhatsApp />
         <PWAInstallButton />
 
