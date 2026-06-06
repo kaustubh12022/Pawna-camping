@@ -1,12 +1,12 @@
-const express = require('express');
+// LOAD ENVIRONMENT VARIABLES — must be first before any other require
 const dotenv = require('dotenv');
+dotenv.config();
+
+const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const connectDB = require('./config/db');
-
-// LOAD ENVIRONMENT VARIABLES
-dotenv.config();
 
 // CONNECT TO DATABASE
 connectDB();

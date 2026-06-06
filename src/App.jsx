@@ -10,6 +10,7 @@ import Reviews from './components/Reviews';
 import Gallery from './components/Gallery';
 import Footer from './components/Footer';
 import SaleBanner from './components/SaleBanner';
+import PWAInstallButton from './components/PWAInstallButton';
 
 // Lazy loaded pages for performance (Code Splitting)
 const BookingPage = React.lazy(() => import('./pages/BookingPage'));
@@ -62,6 +63,7 @@ function App() {
     <ErrorBoundary>
       <Router>
         <ConditionalWhatsApp />
+        <PWAInstallButton />
 
         <Suspense fallback={<PageLoader />}>
           <Routes>

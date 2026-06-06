@@ -13,6 +13,7 @@ import {
     Tent,
     LineChart
 } from 'lucide-react';
+import ManualInstallButton from '../../components/ManualInstallButton';
 
 const NAV_ITEMS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/manager' },
@@ -202,6 +203,7 @@ const ManagerLayout = ({ children }) => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        <ManualInstallButton className="mr-2" />
                         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-stone-200 to-stone-300 flex items-center justify-center">
                             <span className="text-xs font-bold text-stone-600">M</span>
                         </div>

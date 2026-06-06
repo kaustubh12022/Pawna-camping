@@ -5,6 +5,20 @@ import PackageManagement from './PackageManagement';
 
 const API = import.meta.env.VITE_API_URL || '';
 
+const isVideo = (url) => {
+    if (!url) return false;
+    const lowerUrl = typeof url === 'string' ? url.toLowerCase() : url.url?.toLowerCase() || '';
+    return lowerUrl.includes('.mp4') || lowerUrl.includes('.mov') || lowerUrl.includes('.webm');
+};
+
+const MediaRenderer = ({ src, alt, className }) => {
+    const url = typeof src === 'string' ? src : src?.url;
+    if (isVideo(url)) {
+        return <video src={url} className={className} autoPlay loop muted playsInline />;
+    }
+    return <img loading="lazy" src={url} alt={alt} className={className} />;
+};
+
 const PropertyDetail = () => {
     const navigate = useNavigate();
     const { id } = useParams();
@@ -134,7 +148,7 @@ const PropertyDetail = () => {
                     {property.coverImage && (
                         <div className="bg-white rounded-2xl border border-stone-100 p-4">
                             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Cover Image</p>
-                            <img loading="lazy" src={typeof property.coverImage === 'string' ? property.coverImage : property.coverImage?.url} alt="Cover" className="w-full max-h-64 object-cover rounded-xl" />
+                            <MediaRenderer src={property.coverImage} alt="Cover" className="w-full max-h-64 object-cover rounded-xl" />
                         </div>
                     )}
                     {property.images?.length > 0 && (
@@ -142,7 +156,7 @@ const PropertyDetail = () => {
                             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Gallery ({property.images.length} images)</p>
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {property.images.map((img, i) => (
-                                    <img loading="lazy" key={i} src={typeof img === 'string' ? img : img.url} alt={`Gallery ${i + 1}`} className="w-full h-32 object-cover rounded-xl border border-stone-100" />
+                                    <MediaRenderer key={i} src={img} alt={`Gallery ${i + 1}`} className="w-full h-32 object-cover rounded-xl border border-stone-100" />
                                 ))}
                             </div>
                         </div>

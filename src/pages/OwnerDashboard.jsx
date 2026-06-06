@@ -17,6 +17,7 @@ import {
     PieChart as PieChartIcon
 } from 'lucide-react';
 import PackageManagement from './manager/PackageManagement';
+import ManualInstallButton from '../components/ManualInstallButton';
 
 const COLORS = ['#10b981', '#0ea5e9', '#f59e0b', '#8b5cf6'];
 const API = import.meta.env.VITE_API_URL || '';
@@ -247,16 +248,19 @@ const OwnerDashboard = () => {
                         </div>
                     </div>
                     {/* Logout on mobile is moved here for better layout */}
-                    <button
-                        onClick={handleLogout}
-                        className="lg:hidden p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-                        title="Sign Out"
-                    >
-                        <LogOut className="w-5 h-5" />
-                    </button>
+                    <div className="lg:hidden flex items-center gap-2">
+                        <ManualInstallButton />
+                        <button
+                            onClick={handleLogout}
+                            className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                            title="Sign Out"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-4 w-full lg:w-auto">
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto mt-4 lg:mt-0">
                     {/* PROPERTY SELECTOR */}
                     <div className="relative w-full lg:w-auto">
                         <button 
@@ -292,13 +296,16 @@ const OwnerDashboard = () => {
                         )}
                     </div>
 
-                    <button
-                        onClick={handleLogout}
-                        className="hidden lg:block p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors flex-shrink-0"
-                        title="Sign Out"
-                    >
-                        <LogOut className="w-5 h-5" />
-                    </button>
+                    <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
+                        <ManualInstallButton />
+                        <button
+                            onClick={handleLogout}
+                            className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                            title="Sign Out"
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
             </header>
 

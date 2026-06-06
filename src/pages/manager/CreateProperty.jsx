@@ -122,6 +122,21 @@ const CreateProperty = () => {
         setIsSaving(true);
         setError('');
 
+        // Automatically append pending input tags to prevent data loss
+        let finalAmenities = [...amenities];
+        if (amenityInput.trim() && !finalAmenities.includes(amenityInput.trim())) {
+            finalAmenities.push(amenityInput.trim());
+            setAmenities(finalAmenities);
+            setAmenityInput('');
+        }
+
+        let finalRules = [...rules];
+        if (ruleInput.trim() && !finalRules.includes(ruleInput.trim())) {
+            finalRules.push(ruleInput.trim());
+            setRules(finalRules);
+            setRuleInput('');
+        }
+
         const payload = {
             name: formData.name,
             type: formData.type,
@@ -140,8 +155,8 @@ const CreateProperty = () => {
             checkOutTime: formData.checkOutTime,
             whatsappNumber: formData.whatsappNumber,
             isActive: formData.isActive,
-            amenities,
-            rules,
+            amenities: finalAmenities,
+            rules: finalRules,
             images,
             coverImage
         };

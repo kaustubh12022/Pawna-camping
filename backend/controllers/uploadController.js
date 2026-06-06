@@ -1,8 +1,22 @@
 const cloudinary = require('../config/cloudinary');
 const { Readable } = require('stream');
 
+// Pre-flight check for Cloudinary configuration
+const ensureCloudinaryConfigured = () => {
+    const config = cloudinary.config();
+    if (!config.cloud_name || !config.api_key || !config.api_secret) {
+        const err = new Error(
+            'Cloudinary is not configured. Missing API credentials. ' +
+            'Check CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in your .env file.'
+        );
+        err.status = 500;
+        throw err;
+    }
+};
+
 // Helper to upload a single buffer to Cloudinary
 const streamUpload = (buffer, folder = 'lonavala-stays') => {
+    ensureCloudinaryConfigured();
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
             { folder: folder, resource_type: 'auto' }, // auto supports both image and video

@@ -2,6 +2,20 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
+const isVideo = (url) => {
+    if (!url) return false;
+    const lowerUrl = typeof url === 'string' ? url.toLowerCase() : url.url?.toLowerCase() || '';
+    return lowerUrl.includes('.mp4') || lowerUrl.includes('.mov') || lowerUrl.includes('.webm');
+};
+
+const MediaRenderer = ({ src, alt, className }) => {
+    const url = typeof src === 'string' ? src : src?.url;
+    if (isVideo(url)) {
+        return <video src={url} className={className} autoPlay loop muted playsInline />;
+    }
+    return <img loading="lazy" src={url} alt={alt} className={className} />;
+};
+
 const VillaDetail = () => {
     const { slug } = useParams();
     const navigate = useNavigate();
@@ -102,8 +116,7 @@ const VillaDetail = () => {
                         className="col-span-2 row-span-2 relative group cursor-pointer overflow-hidden"
                         onClick={() => setActiveImage(0)}
                     >
-                        <img loading="lazy" src={galleryImages[0]} alt={property.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
-                        <div className="absolute inset-0 bg-[#432C19]/10 group-hover:bg-transparent transition-colors duration-500"></div>
+                        <MediaRenderer src={galleryImages[0]} alt={property.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     </motion.div>
                     {galleryImages.slice(1, 5).map((img, i) => (
                         <motion.div
@@ -114,8 +127,7 @@ const VillaDetail = () => {
                             className="relative group cursor-pointer overflow-hidden"
                             onClick={() => setActiveImage(i + 1)}
                         >
-                            <img loading="lazy" src={img} alt={`${property.name} ${i + 2}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
-                            <div className="absolute inset-0 bg-[#432C19]/10 group-hover:bg-transparent transition-colors duration-500"></div>
+                            <MediaRenderer src={img} alt={`${property.name} ${i + 2}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                         </motion.div>
                     ))}
                 </div>
@@ -129,9 +141,9 @@ const VillaDetail = () => {
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ duration: 0.4, delay: 0.05 * i }}
-                                className="flex-shrink-0 w-[85vw] h-[60vw] snap-center rounded-xl overflow-hidden"
+                                className="flex-shrink-0 w-[85vw] h-[55vw] snap-center rounded-2xl overflow-hidden"
                             >
-                                <img loading="lazy" src={img} alt={`${property.name} ${i + 1}`} className="w-full h-full object-cover" />
+                                <MediaRenderer src={img} alt={`${property.name} ${i + 1}`} className="w-full h-full object-cover" />
                             </motion.div>
                         ))}
                     </div>
