@@ -74,6 +74,11 @@ const SaleBanner = () => {
                     .animate-marquee {
                         animation: marquee 20s linear infinite;
                     }
+                    @media (max-width: 640px) {
+                        .animate-marquee {
+                            animation: marquee 10s linear infinite;
+                        }
+                    }
                     .pause-marquee {
                         animation-play-state: paused;
                     }

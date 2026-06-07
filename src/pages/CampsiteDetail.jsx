@@ -195,19 +195,37 @@ const CampsiteDetail = () => {
                                 <p className="text-[var(--listing-text-secondary)] font-light text-base sm:text-lg leading-relaxed whitespace-pre-line">{property.description}</p>
                             </div>
 
-                            <div className="mb-8 sm:mb-10">
-                                <h3 className="text-sm font-bold mb-4 sm:mb-5 uppercase tracking-wider">Amenities</h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6">
-                                    {property.amenities.map((amenity, i) => (
-                                        <div key={i} className="flex items-center gap-2 text-[var(--listing-text-secondary)] font-light text-sm sm:text-base bg-[var(--listing-card-bg)] p-2 rounded-lg border border-[var(--listing-border)]">
-                                            <svg className="w-4 h-4 text-[var(--listing-accent)] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                            <span className="truncate">{amenity}</span>
-                                        </div>
-                                    ))}
+                            {property.amenities && property.amenities.length > 0 && (
+                                <div className="mb-8 sm:mb-10">
+                                    <h3 className="text-sm font-bold mb-4 sm:mb-5 uppercase tracking-wider">Amenities</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6">
+                                        {property.amenities.flatMap(a => typeof a === 'string' ? a.split(',').map(s => s.trim()).filter(Boolean) : [a]).map((amenity, i) => (
+                                            <div key={i} className="flex items-center gap-2 text-[var(--listing-text-secondary)] font-light text-sm sm:text-base bg-[var(--listing-card-bg)] p-2 rounded-lg border border-[var(--listing-border)]">
+                                                <svg className="w-4 h-4 text-[var(--listing-accent)] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <span className="truncate">{amenity}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+
+                            {property.rules && property.rules.length > 0 && (
+                                <div className="mb-8 sm:mb-10">
+                                    <h3 className="text-sm font-bold mb-4 sm:mb-5 uppercase tracking-wider">House Rules</h3>
+                                    <div className="space-y-3">
+                                        {property.rules.flatMap(r => typeof r === 'string' ? r.split(',').map(s => s.trim()).filter(Boolean) : [r]).map((rule, i) => (
+                                            <div key={i} className="flex items-start gap-2 text-[var(--listing-text-secondary)] font-light text-sm sm:text-base">
+                                                <svg className="w-4 h-4 text-rose-500 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                <span>{rule}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </motion.div>
                     </div>
 
@@ -291,12 +309,12 @@ const CampsiteDetail = () => {
                                 </div>
                                 <button
                                     onClick={() => handleBookPackage(pkg.title)}
-                                    className="w-full py-3.5 bg-[var(--listing-accent)] text-white rounded-xl text-sm font-bold tracking-wide hover:opacity-90 transition-opacity active:scale-[0.98] mt-auto"
+                                    className="w-full py-3.5 bg-[var(--listing-accent)] text-white rounded-xl text-sm font-bold tracking-wide hover:opacity-90 transition-opacity active:scale-[0.98] mt-auto uppercase"
                                 >
-                                    BOOK NOW
+                                    Contact Owner
                                 </button>
                                 <p className="text-[10px] text-[var(--listing-text-secondary)] text-center leading-tight mt-3">
-                                    This will redirect you to WhatsApp after form filling. You are not being charged yet.
+                                    This will redirect you to WhatsApp after form filling. No charges will be applied.
                                 </p>
                             </motion.div>
                         ))}

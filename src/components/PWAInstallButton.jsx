@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PWAInstallButton = () => {
@@ -6,6 +7,7 @@ const PWAInstallButton = () => {
     const [isVisible, setIsVisible] = useState(false);
     const [isInstalled, setIsInstalled] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const location = useLocation();
 
     useEffect(() => {
         // Check if already installed
@@ -74,8 +76,9 @@ const PWAInstallButton = () => {
         localStorage.setItem('pwa-install-dismissed', Date.now().toString());
     };
 
-    // Don't render if already installed
-    if (isInstalled) return null;
+    // Don't render if already installed or on manager/owner dashboard
+    const isDashboard = location.pathname.startsWith('/manager') || location.pathname.startsWith('/owner');
+    if (isInstalled || isDashboard) return null;
 
     return (
         <>
