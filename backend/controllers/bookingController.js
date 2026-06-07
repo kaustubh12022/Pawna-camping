@@ -2,6 +2,7 @@ const Booking = require('../models/Booking');
 const Package = require('../models/Package');
 const Property = require('../models/Property');
 const BlockedDate = require('../models/BlockedDate');
+const Revenue = require('../models/Revenue');
 
 // ==========================================
 // CAPACITY VALIDATION LOGIC
@@ -240,7 +241,7 @@ const getAllBookings = async (req, res) => {
 // @access  Private (Manager Only)
 const updateBookingStatus = async (req, res) => {
     try {
-        const { status } = req.body;
+        const { status, amount, commission } = req.body;
 
         if (!['confirmed', 'cancelled'].includes(status)) {
             return res.status(400).json({ message: 'INVALID STATUS SUPPLIED' });
@@ -281,6 +282,19 @@ const updateBookingStatus = async (req, res) => {
             if (!hasCapacity) {
                 return res.status(400).json({
                     message: 'Cannot confirm booking. Capacity exceeded for selected dates.'
+                });
+            }
+
+            // Create Revenue if amounts are provided
+            if (amount !== undefined && commission !== undefined && booking.property) {
+                await Revenue.create({
+                    property: booking.property,
+                    bookingRef: booking._id,
+                    amount: amount,
+                    commission: commission,
+                    date: new Date(),
+                    addedBy: req.user._id,
+                    notes: `Automated entry on booking confirmation for ${booking.customerName}`
                 });
             }
         }

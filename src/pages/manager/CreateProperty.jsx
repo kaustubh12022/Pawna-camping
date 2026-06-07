@@ -153,7 +153,8 @@ const CreateProperty = () => {
             pricing: {
                 basePrice: Number(formData.basePrice),
                 discountPrice: formData.discountPrice ? Number(formData.discountPrice) : null,
-                pricePer: formData.pricePer
+                pricePer: formData.pricePer,
+                priceDisplay: formData.basePrice ? `₹${Number(formData.basePrice).toLocaleString('en-IN')}` : ''
             },
             maxGuests: Number(formData.maxGuests),
             checkInTime: formData.checkInTime,

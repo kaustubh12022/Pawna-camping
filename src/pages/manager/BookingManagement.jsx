@@ -18,6 +18,8 @@ const BookingManagement = () => {
     const [sortBy, setSortBy] = useState('newest');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [exportPeriod, setExportPeriod] = useState('');
+    const [confirmBookingData, setConfirmBookingData] = useState(null);
+    const [revenueData, setRevenueData] = useState({ amount: '', commission: '' });
 
     const [newBooking, setNewBooking] = useState({
         customerName: '', customerPhone: '', propertyId: '',
@@ -51,6 +53,29 @@ const BookingManagement = () => {
                 method: 'PATCH', headers: headers(), body: JSON.stringify({ status: newStatus })
             });
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
+            fetchData();
+        } catch (err) { alert(err.message); }
+    };
+
+    const initiateConfirm = (id) => {
+        setConfirmBookingData(id);
+        setRevenueData({ amount: '', commission: '' });
+    };
+
+    const handleConfirmBookingSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`${API}/api/bookings/${confirmBookingData}/status`, {
+                method: 'PATCH',
+                headers: headers(),
+                body: JSON.stringify({ 
+                    status: 'confirmed',
+                    amount: Number(revenueData.amount),
+                    commission: Number(revenueData.commission)
+                })
+            });
+            if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
+            setConfirmBookingData(null);
             fetchData();
         } catch (err) { alert(err.message); }
     };
@@ -257,7 +282,7 @@ const BookingManagement = () => {
                                             <td className="px-5 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {b.status === 'pending' && (
-                                                        <button onClick={() => handleUpdateStatus(b._id, 'confirmed')}
+                                                        <button onClick={() => initiateConfirm(b._id)}
                                                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors">
                                                             <Check className="w-3.5 h-3.5" /> Confirm
                                                         </button>
@@ -304,7 +329,7 @@ const BookingManagement = () => {
                                     
                                     <div className="flex justify-end gap-2 pt-2">
                                         {b.status === 'pending' && (
-                                            <button onClick={() => handleUpdateStatus(b._id, 'confirmed')}
+                                            <button onClick={() => initiateConfirm(b._id)}
                                                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors active:scale-[0.98]">
                                                 <Check className="w-4 h-4" /> Confirm
                                             </button>
@@ -408,7 +433,44 @@ const BookingManagement = () => {
                     </div>
                 </div>
             )}
+            {/* CONFIRM BOOKING MODAL */}
+            {confirmBookingData && (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col">
+                        <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between bg-white">
+                            <div>
+                                <h3 className="text-lg font-bold text-stone-900">Confirm Booking</h3>
+                                <p className="text-xs text-stone-500 mt-0.5">Enter revenue details</p>
+                            </div>
+                            <button onClick={() => setConfirmBookingData(null)} className="p-2 hover:bg-stone-100 rounded-xl transition-colors">
+                                <XIcon className="w-5 h-5 text-stone-400" />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <form onSubmit={handleConfirmBookingSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-stone-900 uppercase tracking-wider mb-1.5">Total Booking Amount (₹) *</label>
+                                    <input type="number" required min="0" value={revenueData.amount} onChange={e => setRevenueData(p => ({...p, amount: e.target.value}))}
+                                        className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-stone-900 uppercase tracking-wider mb-1.5">Commission Amount (₹) *</label>
+                                    <input type="number" required min="0" value={revenueData.commission} onChange={e => setRevenueData(p => ({...p, commission: e.target.value}))}
+                                        className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+                                </div>
+                                <div className="pt-2 flex gap-3">
+                                    <button type="button" onClick={() => setConfirmBookingData(null)}
+                                        className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-bold hover:bg-stone-200 transition-colors">Cancel</button>
+                                    <button type="submit"
+                                        className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-sm">Confirm</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
+
     );
 };
 
