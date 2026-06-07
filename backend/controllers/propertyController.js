@@ -61,7 +61,8 @@ const getProperties = async (req, res) => {
         const properties = await Property.find(query)
             .populate('owner', 'name email')    // Populate basic owner info
             .populate('createdBy', 'name')
-            .sort(sortOptions);
+            .sort(sortOptions)
+            .lean();
 
         res.status(200).json(properties);
     } catch (error) {

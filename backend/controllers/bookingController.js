@@ -224,7 +224,8 @@ const getAllBookings = async (req, res) => {
         const bookings = await Booking.find(query)
             .populate('addedBy', 'name email')
             .populate('property', 'name type slug') // PHASE 2: Populate property info
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
 
         res.status(200).json(bookings);
     } catch (error) {
@@ -251,6 +252,10 @@ const updateBookingStatus = async (req, res) => {
 
         if (!booking) {
             return res.status(404).json({ message: 'BOOKING NOT FOUND' });
+        }
+
+        if (booking.status === status) {
+            return res.status(400).json({ message: `Booking is already ${status}` });
         }
 
         if (status === 'confirmed') {
