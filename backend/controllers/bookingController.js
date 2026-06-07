@@ -10,35 +10,45 @@ const Revenue = require('../models/Revenue');
 // PHASE 2: Updated to support both property-scoped and legacy (global) capacity checks.
 // - If propertyId is given: find the package scoped to that property
 // - If no propertyId: fallback to old global lookup by package title (preserves live site behaviour)
-const checkCapacityOverlap = async (packageType, checkIn, checkOut, propertyId = null) => {
+const checkCapacityOverlap = async (packageType, checkIn, checkOut, propertyId = null, propertyType = null) => {
     let maxCapacity = 0;
-    let pkg = null;
-
-    if (propertyId) {
-        // PROPERTY-SCOPED: Look up package for this specific property
-        pkg = await Package.findOne({ title: packageType, property: propertyId });
-    }
-
-    if (!pkg) {
-        // FALLBACK: Legacy global lookup (preserves existing live booking behaviour)
-        pkg = await Package.findOne({ title: packageType });
-    }
-
-    if (pkg && pkg.maxCapacity > 0) {
-        maxCapacity = pkg.maxCapacity;
+    
+    // IF VILLA: The whole property is booked at once, so maxCapacity = 1
+    if (propertyType === 'villa') {
+        maxCapacity = 1;
     } else {
-        return true; // Unlimited or not found — allow booking
+        // If not a villa, rely on Package capacity
+        let pkg = null;
+        if (propertyId) {
+            // PROPERTY-SCOPED: Look up package for this specific property
+            pkg = await Package.findOne({ title: packageType, property: propertyId });
+        }
+
+        if (!pkg) {
+            // FALLBACK: Legacy global lookup (preserves existing live booking behaviour)
+            pkg = await Package.findOne({ title: packageType });
+        }
+
+        if (pkg && pkg.maxCapacity > 0) {
+            maxCapacity = pkg.maxCapacity;
+        } else {
+            return true; // Unlimited or not found — allow booking
+        }
     }
 
     // Build overlap query
     const overlapQuery = {
         status: 'confirmed',
-        packageType: packageType,
         $and: [
             { checkIn: { $lt: new Date(checkOut) } },
             { checkOut: { $gt: new Date(checkIn) } }
         ]
     };
+
+    // If it's a campsite package, filter by packageType. If villa, we just care about the property.
+    if (propertyType !== 'villa' && packageType) {
+        overlapQuery.packageType = packageType;
+    }
 
     // PHASE 2: If propertyId given, scope the count to that property only
     if (propertyId) {
@@ -102,7 +112,7 @@ const createBooking = async (req, res) => {
         }
 
         // CAPACITY CHECK — pass propertyId for scoped check if available
-        const hasCapacity = await checkCapacityOverlap(packageType, checkIn, checkOut, propertyRef);
+        const hasCapacity = await checkCapacityOverlap(packageType, checkIn, checkOut, propertyRef, propertyType);
         if (!hasCapacity) {
             return res.status(400).json({
                 message: 'Selected package is fully booked for these dates.'
@@ -281,7 +291,8 @@ const updateBookingStatus = async (req, res) => {
                 booking.packageType,
                 booking.checkIn,
                 booking.checkOut,
-                booking.property // May be null for legacy — fallback handled inside
+                booking.property, // May be null for legacy — fallback handled inside
+                booking.propertyType
             );
 
             if (!hasCapacity) {
