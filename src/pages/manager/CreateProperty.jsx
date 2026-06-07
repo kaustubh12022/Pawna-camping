@@ -34,7 +34,12 @@ const CreateProperty = () => {
         if (isEditMode) {
             const fetchProperty = async () => {
                 try {
-                    const res = await fetch(`${API}/api/properties/id/${id}`);
+                    const token = localStorage.getItem('managerToken');
+                    const res = await fetch(`${API}/api/properties/id/${id}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
                     if (!res.ok) throw new Error('Failed to fetch property');
                     const data = await res.json();
                     

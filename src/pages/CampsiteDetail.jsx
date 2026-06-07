@@ -192,19 +192,22 @@ const CampsiteDetail = () => {
                             </div>
 
                             <div className="border-t border-[var(--listing-border)] pt-6 sm:pt-8 mb-8 sm:mb-10">
+                                {property.shortDescription && (
+                                    <p className="text-[var(--listing-text-primary)] font-medium text-lg sm:text-xl leading-relaxed whitespace-pre-line mb-4">{property.shortDescription}</p>
+                                )}
                                 <p className="text-[var(--listing-text-secondary)] font-light text-base sm:text-lg leading-relaxed whitespace-pre-line">{property.description}</p>
                             </div>
 
                             {property.amenities && property.amenities.length > 0 && (
-                                <div className="mb-8 sm:mb-10">
-                                    <h3 className="text-sm font-bold mb-4 sm:mb-5 uppercase tracking-wider">Amenities</h3>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6">
+                                <div className="mb-8 sm:mb-10 pt-8 border-t border-[var(--listing-border)]">
+                                    <h3 className="text-xl font-semibold mb-6">What this place offers</h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
                                         {property.amenities.flatMap(a => typeof a === 'string' ? a.split(',').map(s => s.trim()).filter(Boolean) : [a]).map((amenity, i) => (
-                                            <div key={i} className="flex items-center gap-2 text-[var(--listing-text-secondary)] font-light text-sm sm:text-base bg-[var(--listing-card-bg)] p-2 rounded-lg border border-[var(--listing-border)]">
-                                                <svg className="w-4 h-4 text-[var(--listing-accent)] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            <div key={i} className="flex items-center gap-4 text-[var(--listing-text-primary)]">
+                                                <svg className="w-6 h-6 text-stone-700 font-light flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M5 13l4 4L19 7" />
                                                 </svg>
-                                                <span className="truncate">{amenity}</span>
+                                                <span className="text-base font-light">{amenity}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -212,15 +215,15 @@ const CampsiteDetail = () => {
                             )}
 
                             {property.rules && property.rules.length > 0 && (
-                                <div className="mb-8 sm:mb-10">
-                                    <h3 className="text-sm font-bold mb-4 sm:mb-5 uppercase tracking-wider">House Rules</h3>
-                                    <div className="space-y-3">
+                                <div className="mb-8 sm:mb-10 pt-8 border-t border-[var(--listing-border)]">
+                                    <h3 className="text-xl font-semibold mb-6">Things to know</h3>
+                                    <div className="space-y-4">
                                         {property.rules.flatMap(r => typeof r === 'string' ? r.split(',').map(s => s.trim()).filter(Boolean) : [r]).map((rule, i) => (
-                                            <div key={i} className="flex items-start gap-2 text-[var(--listing-text-secondary)] font-light text-sm sm:text-base">
-                                                <svg className="w-4 h-4 text-rose-500 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            <div key={i} className="flex items-start gap-4 text-[var(--listing-text-primary)]">
+                                                <svg className="w-6 h-6 text-stone-700 font-light flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
-                                                <span>{rule}</span>
+                                                <span className="text-base font-light leading-relaxed">{rule}</span>
                                             </div>
                                         ))}
                                     </div>
