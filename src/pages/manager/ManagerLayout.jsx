@@ -11,7 +11,8 @@ import {
     X,
     ChevronRight,
     Tent,
-    LineChart
+    LineChart,
+    Star
 } from 'lucide-react';
 import ManualInstallButton from '../../components/ManualInstallButton';
 
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
     { id: 'bookings', label: 'Bookings', icon: CalendarCheck, path: '/manager/bookings' },
     { id: 'revenue', label: 'Revenue', icon: LineChart, path: '/manager/revenue' },
     { id: 'owners', label: 'Owners', icon: Users, path: '/manager/owners' },
+    { id: 'reviews', label: 'Reviews', icon: Star, path: '/manager/reviews' },
     { id: 'settings', label: 'Settings', icon: Settings, path: '/manager/settings' },
 ];
 
@@ -36,8 +38,19 @@ const ManagerLayout = ({ children }) => {
 
     // Check auth on mount and subscribe to push notifications
     useEffect(() => {
+        const isTokenExpired = (token) => {
+            if (!token) return true;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.exp * 1000 < Date.now();
+            } catch (e) {
+                return true;
+            }
+        };
+
         const token = localStorage.getItem('managerToken');
-        if (!token) {
+        if (!token || isTokenExpired(token)) {
+            localStorage.removeItem('managerToken');
             navigate('/manager/login');
             return;
         }

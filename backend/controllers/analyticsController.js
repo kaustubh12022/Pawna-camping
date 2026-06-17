@@ -278,39 +278,99 @@ const getOwnerRevenue = async (req, res) => {
         const Revenue = require('../models/Revenue');
         const userPropertyIds = resolvePropertyScope(req);
         
-        const matchStage = { property: { $ne: null } };
+        let targetPropertyIds = userPropertyIds;
+        if (req.query.propertyId) {
+            // Ensure the requested property is actually owned by the user
+            if (userPropertyIds.some(id => id.toString() === req.query.propertyId)) {
+                targetPropertyIds = [req.query.propertyId];
+            } else {
+                return res.status(403).json({ message: 'Access denied for this property' });
+            }
+        }
         
+        const objectIdTargets = targetPropertyIds.map(id => new mongoose.Types.ObjectId(id.toString()));
+        
+        const bookingMatch = {
+            property: { $in: objectIdTargets },
+            status: { $ne: 'cancelled' }
+        };
+        
+        const revenueMatch = {
+            property: { $in: objectIdTargets }
+        };
+
         if (req.query.date) {
             const targetDate = new Date(req.query.date);
             if (!isNaN(targetDate.getTime())) {
-                matchStage.date = { 
-                    $gte: new Date(targetDate.setHours(0,0,0,0)),
-                    $lte: new Date(targetDate.setHours(23,59,59,999))
-                };
+                bookingMatch.checkIn = { $lte: targetDate };
+                bookingMatch.checkOut = { $gt: targetDate };
+                
+                const startOfDay = new Date(targetDate.setHours(0,0,0,0));
+                const endOfDay = new Date(targetDate.setHours(23,59,59,999));
+                revenueMatch.date = { $gte: startOfDay, $lte: endOfDay };
             }
         }
 
-        if (req.query.propertyId) {
-            matchStage.property = new mongoose.Types.ObjectId(req.query.propertyId);
-        } else if (userPropertyIds && userPropertyIds.length > 0) {
-            matchStage.property = {
-                $in: userPropertyIds.map(id => new mongoose.Types.ObjectId(id.toString()))
-            };
+        // Find all Bookings for these properties (excluding cancelled ones)
+        const bookings = await Booking.find(bookingMatch)
+            .populate('property', 'name type')
+            .sort({ createdAt: -1 });
+
+        // Find all Revenue entries for these properties to map exact commission
+        const revenues = await Revenue.find(revenueMatch)
+            .populate('property', 'name type');
+
+        // Map bookingId to its exact commission AND amount
+        const revenueMap = {};
+        revenues.forEach(rev => {
+            if (rev.bookingRef) {
+                revenueMap[rev.bookingRef.toString()] = {
+                    commission: rev.commission,
+                    amount: rev.amount
+                };
+            }
+        });
+
+        const formattedRevenues = [];
+
+        // 1. Add all valid Bookings
+        for (let booking of bookings) {
+            // Use exact amount/commission if manager confirmed it, otherwise use totalPrice and estimate 15%
+            const revData = revenueMap[booking._id.toString()];
+            
+            const bookingAmount = revData !== undefined ? revData.amount : booking.totalPrice;
+            const platformCommission = revData !== undefined ? revData.commission : (booking.totalPrice * 0.15);
+            
+            formattedRevenues.push({
+                _id: booking._id,
+                date: booking.createdAt,
+                property: booking.property,
+                booking: {
+                    customerName: booking.customerName,
+                    guests: booking.guests,
+                    checkIn: booking.checkIn,
+                    checkOut: booking.checkOut,
+                    status: booking.status
+                },
+                ownerEarnings: bookingAmount - platformCommission
+            });
         }
 
-        const revenues = await Revenue.find(matchStage)
-            .populate('property', 'name type')
-            .populate('booking', 'customerName guests checkIn checkOut')
-            .sort({ date: -1 });
-
-        // Strip commission! Owner earning = amount - commission
-        const formattedRevenues = revenues.map(rev => {
-            const obj = rev.toObject();
-            obj.ownerEarnings = obj.amount - obj.commission;
-            delete obj.commission;
-            delete obj.amount; // Hide total amount to avoid confusion, they only care about their cut
-            return obj;
+        // 2. Add manual Revenue entries that have NO associated booking
+        revenues.forEach(rev => {
+            if (!rev.bookingRef) {
+                formattedRevenues.push({
+                    _id: rev._id,
+                    date: rev.date,
+                    property: rev.property,
+                    booking: null,
+                    ownerEarnings: rev.amount - rev.commission
+                });
+            }
         });
+
+        // Sort descending by date
+        formattedRevenues.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         res.status(200).json(formattedRevenues);
     } catch (error) {

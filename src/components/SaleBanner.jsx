@@ -1,16 +1,30 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePromotion } from '../context/PromotionContext';
 
 const SaleBanner = () => {
     const [isVisible, setIsVisible] = useState(true);
+    const { bannerMessage, isLoading } = usePromotion();
 
-    if (!isVisible) return null;
+    if (!isVisible || isLoading) return null;
 
     const scrollToProperties = () => {
         const propsSection = document.getElementById('properties');
         if (propsSection) {
             propsSection.scrollIntoView({ behavior: 'smooth' });
         }
+    };
+
+    // Helper to bold the discount percentage dynamically
+    const formatMessage = (msg) => {
+        if (!msg) return "";
+        // Match XX% OFF or XX% discount
+        const parts = msg.split(/(\d+% OFF|\d+% discount)/i);
+        return parts.map((part, i) => 
+            /(\d+% OFF|\d+% discount)/i.test(part) ? 
+            <span key={i} className="font-bold underline decoration-2 underline-offset-2">{part}</span> : 
+            part
+        );
     };
 
     return (
@@ -32,16 +46,16 @@ const SaleBanner = () => {
                     <div className="flex-1 overflow-hidden relative flex items-center h-full group mask-image-edges">
                         <div className="flex whitespace-nowrap animate-marquee group-hover:pause-marquee items-center min-w-full">
                             <span className="mr-8">
-                                🌧️ Monsoon Flash Sale! Get up to <span className="font-bold underline decoration-2 underline-offset-2">15% OFF</span> on selected properties.
+                                {formatMessage(bannerMessage)}
                             </span>
                             <span className="mr-8">
-                                ✨ Book your weekend getaway now and save big!
+                                {formatMessage(bannerMessage)}
                             </span>
                             <span className="mr-8">
-                                🌧️ Monsoon Flash Sale! Get up to <span className="font-bold underline decoration-2 underline-offset-2">15% OFF</span> on selected properties.
+                                {formatMessage(bannerMessage)}
                             </span>
                             <span className="mr-8">
-                                ✨ Book your weekend getaway now and save big!
+                                {formatMessage(bannerMessage)}
                             </span>
                         </div>
                     </div>
@@ -72,11 +86,11 @@ const SaleBanner = () => {
                         100% { transform: translateX(-50%); }
                     }
                     .animate-marquee {
-                        animation: marquee 20s linear infinite;
+                        animation: marquee 10s linear infinite;
                     }
                     @media (max-width: 640px) {
                         .animate-marquee {
-                            animation: marquee 10s linear infinite;
+                            animation: marquee 5s linear infinite;
                         }
                     }
                     .pause-marquee {

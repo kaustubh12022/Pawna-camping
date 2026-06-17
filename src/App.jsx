@@ -31,6 +31,8 @@ const BookingManagement = React.lazy(() => import('./pages/manager/BookingManage
 const OwnerManagement = React.lazy(() => import('./pages/manager/OwnerManagement'));
 const RevenueManagement = React.lazy(() => import('./pages/manager/RevenueManagement'));
 const SettingsPage = React.lazy(() => import('./pages/manager/SettingsPage'));
+const ReviewManagement = React.lazy(() => import('./pages/manager/ReviewManagement'));
+const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'));
 
 const OwnerLogin = React.lazy(() => import('./pages/OwnerLogin'));
 const OwnerDashboard = React.lazy(() => import('./pages/OwnerDashboard'));
@@ -83,47 +85,56 @@ const PWARedirect = () => {
     return null;
 };
 
+import { PromotionProvider } from './context/PromotionContext';
+
 function App() {
   return (
     <ErrorBoundary>
-      <Router>
-        <PWARedirect />
-        <ConditionalWhatsApp />
-        <PWAInstallButton />
+      <PromotionProvider>
+        <Router>
+          <PWARedirect />
+          <ConditionalWhatsApp />
+          <PWAInstallButton />
 
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            {/* PUBLIC FACING WEBSITE */}
-            <Route path="/" element={<PublicSite />} />
-            <Route path="/campsite/:slug" element={<CampsiteDetail />} />
-            <Route path="/villa/:slug" element={<VillaDetail />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/refund" element={<RefundPolicy />} />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* PUBLIC FACING WEBSITE */}
+              <Route path="/" element={<PublicSite />} />
+              <Route path="/campsite/:slug" element={<CampsiteDetail />} />
+              <Route path="/villa/:slug" element={<VillaDetail />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/refund" element={<RefundPolicy />} />
 
-            {/* DEDICATED BOOKING PAGE */}
-            <Route path="/booking" element={<BookingPage />} />
+              {/* DEDICATED BOOKING PAGE */}
+              <Route path="/booking" element={<BookingPage />} />
 
-            {/* MANAGER LOGIN (standalone, no sidebar) */}
-            <Route path="/manager/login" element={<ManagerLogin />} />
+              {/* MANAGER LOGIN (standalone, no sidebar) */}
+              <Route path="/manager/login" element={<ManagerLogin />} />
 
-            {/* PHASE 5/6: MANAGER PORTAL (with sidebar layout) */}
-            <Route path="/manager" element={<ManagerLayout><DashboardHome /></ManagerLayout>} />
-            <Route path="/manager/properties" element={<ManagerLayout><PropertyManagement /></ManagerLayout>} />
-            <Route path="/manager/properties/new" element={<ManagerLayout><CreateProperty /></ManagerLayout>} />
-            <Route path="/manager/properties/:id" element={<ManagerLayout><PropertyDetail /></ManagerLayout>} />
-            <Route path="/manager/properties/:id/edit" element={<ManagerLayout><CreateProperty /></ManagerLayout>} />
-            <Route path="/manager/bookings" element={<ManagerLayout><BookingManagement /></ManagerLayout>} />
-            <Route path="/manager/revenue" element={<ManagerLayout><RevenueManagement /></ManagerLayout>} />
-            <Route path="/manager/owners" element={<ManagerLayout><OwnerManagement /></ManagerLayout>} />
-            <Route path="/manager/settings" element={<ManagerLayout><SettingsPage /></ManagerLayout>} />
+              {/* PHASE 5/6: MANAGER PORTAL (with sidebar layout) */}
+              <Route path="/manager" element={<ManagerLayout><DashboardHome /></ManagerLayout>} />
+              <Route path="/manager/properties" element={<ManagerLayout><PropertyManagement /></ManagerLayout>} />
+              <Route path="/manager/properties/new" element={<ManagerLayout><CreateProperty /></ManagerLayout>} />
+              <Route path="/manager/properties/:id" element={<ManagerLayout><PropertyDetail /></ManagerLayout>} />
+              <Route path="/manager/properties/:id/edit" element={<ManagerLayout><CreateProperty /></ManagerLayout>} />
+              <Route path="/manager/bookings" element={<ManagerLayout><BookingManagement /></ManagerLayout>} />
+              <Route path="/manager/revenue" element={<ManagerLayout><RevenueManagement /></ManagerLayout>} />
+              <Route path="/manager/owners" element={<ManagerLayout><OwnerManagement /></ManagerLayout>} />
+              <Route path="/manager/reviews" element={<ManagerLayout><ReviewManagement /></ManagerLayout>} />
+              <Route path="/manager/settings" element={<ManagerLayout><SettingsPage /></ManagerLayout>} />
 
-            {/* PROTECTED OWNER ANALYTICS DASHBOARD */}
-            <Route path="/owner/login" element={<OwnerLogin />} />
-            <Route path="/owner" element={<OwnerDashboard />} />
-          </Routes>
-        </Suspense>
-      </Router>
+              {/* PROTECTED OWNER ANALYTICS DASHBOARD */}
+              <Route path="/manager/login" element={<ManagerLogin />} />
+              <Route path="/owner/login" element={<OwnerLogin />} />
+              <Route path="/owner" element={<OwnerDashboard />} />
+
+              {/* CATCH-ALL 404 ROUTE */}
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
+        </Router>
+      </PromotionProvider>
     </ErrorBoundary>
   );
 }

@@ -15,11 +15,15 @@ const packageSchema = new mongoose.Schema({
         required: true
     },
     price: {
-        type: String, // E.g., '₹1,200'
+        type: String, // E.g., '₹1,200 - ₹1,500' or default display
         required: true
     },
-    priceValue: {
-        type: Number, // Useful for sorting/calculations
+    weekdayPrice: {
+        type: Number,
+        default: 0
+    },
+    weekendPrice: {
+        type: Number,
         default: 0
     },
     maxCapacity: {
@@ -44,7 +48,7 @@ const packageSchema = new mongoose.Schema({
 });
 
 // Compound index: get packages for a specific property sorted by price
-packageSchema.index({ property: 1, priceValue: 1 });
+packageSchema.index({ property: 1, weekdayPrice: 1 });
 
 module.exports = mongoose.model('Package', packageSchema);
 

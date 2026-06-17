@@ -1,5 +1,69 @@
 const Property = require('../models/Property');
+const User = require('../models/User');
+const Package = require('../models/Package');
+const Review = require('../models/Review');
 const { generateUniqueSlug } = require('../utils/slugify');
+
+// ==========================================
+// HELPER: ENRICH CAMPSITES WITH MIN PACKAGE PRICE
+// ==========================================
+const enrichPropertiesWithMinPrice = async (properties) => {
+    const campsites = properties.filter(p => p.type === 'campsite');
+    if (campsites.length === 0) return properties;
+
+    const allPackages = await Package.find().lean();
+
+    for (const prop of campsites) {
+        const propPackages = allPackages.filter(pkg => 
+            !pkg.property || 
+            pkg.property.toString() === prop._id.toString()
+        );
+
+        if (propPackages.length > 0) {
+            let minPrice = Infinity;
+            for (const pkg of propPackages) {
+                let pkgPrice = pkg.weekdayPrice || pkg.priceValue;
+                if (!pkgPrice && pkg.price) {
+                    const parsed = parseInt(pkg.price.replace(/[^0-9]/g, ''), 10);
+                    if (!isNaN(parsed)) pkgPrice = parsed;
+                }
+                if (pkgPrice && pkgPrice < minPrice) {
+                    minPrice = pkgPrice;
+                }
+            }
+
+            if (minPrice !== Infinity) {
+                if (!prop.pricing) prop.pricing = {};
+                prop.pricing.weekdayPrice = minPrice;
+                prop.pricing.weekendPrice = minPrice;
+                prop.pricing.priceDisplay = `₹${minPrice.toLocaleString('en-IN')}`;
+            }
+        }
+    }
+    return properties;
+};
+
+// ==========================================
+// HELPER: ENRICH PROPERTIES WITH REVIEW DATA
+// ==========================================
+const enrichPropertiesWithReviews = async (properties) => {
+    if (properties.length === 0) return properties;
+
+    const allReviews = await Review.find({ isApproved: true }).lean();
+
+    for (const prop of properties) {
+        const propReviews = allReviews.filter(r => r.property && r.property.toString() === prop._id.toString());
+        
+        prop.reviewCount = propReviews.length;
+        if (propReviews.length > 0) {
+            const sum = propReviews.reduce((acc, curr) => acc + curr.rating, 0);
+            prop.averageRating = Number((sum / propReviews.length).toFixed(1));
+        } else {
+            prop.averageRating = 0;
+        }
+    }
+    return properties;
+};
 
 // ==========================================
 // PUBLIC: GET ALL PROPERTIES (with filters)
@@ -53,16 +117,19 @@ const getProperties = async (req, res) => {
         let sortOptions = { createdAt: -1 }; // Default: newest first
 
         if (sortBy) {
-            const sortField = sortBy === 'price' ? 'pricing.basePrice' : sortBy;
+            const sortField = sortBy === 'price' ? 'pricing.weekdayPrice' : sortBy;
             const sortOrder = order === 'asc' ? 1 : -1;
             sortOptions = { [sortField]: sortOrder };
         }
 
-        const properties = await Property.find(query)
+        let properties = await Property.find(query)
             .populate('owner', 'name email')    // Populate basic owner info
             .populate('createdBy', 'name')
             .sort(sortOptions)
             .lean();
+
+        properties = await enrichPropertiesWithMinPrice(properties);
+        properties = await enrichPropertiesWithReviews(properties);
 
         res.status(200).json(properties);
     } catch (error) {
@@ -79,15 +146,19 @@ const getProperties = async (req, res) => {
 // @access  Public
 const getPropertyBySlug = async (req, res) => {
     try {
-        const property = await Property.findOne({ slug: req.params.slug })
+        let property = await Property.findOne({ slug: req.params.slug })
             .populate('owner', 'name email')
-            .populate('createdBy', 'name');
+            .populate('createdBy', 'name')
+            .lean();
 
         if (!property) {
             return res.status(404).json({ message: 'PROPERTY NOT FOUND' });
         }
 
-        res.status(200).json(property);
+        const enriched = await enrichPropertiesWithMinPrice([property]);
+        const enrichedWithReviews = await enrichPropertiesWithReviews(enriched);
+
+        res.status(200).json(enrichedWithReviews[0]);
     } catch (error) {
         res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
     }
@@ -102,15 +173,19 @@ const getPropertyBySlug = async (req, res) => {
 // @access  Manager only
 const getPropertyById = async (req, res) => {
     try {
-        const property = await Property.findById(req.params.id)
+        let property = await Property.findById(req.params.id)
             .populate('owner', 'name email')
-            .populate('createdBy', 'name');
+            .populate('createdBy', 'name')
+            .lean();
 
         if (!property) {
             return res.status(404).json({ message: 'PROPERTY NOT FOUND' });
         }
 
-        res.status(200).json(property);
+        const enriched = await enrichPropertiesWithMinPrice([property]);
+        const enrichedWithReviews = await enrichPropertiesWithReviews(enriched);
+
+        res.status(200).json(enrichedWithReviews[0]);
     } catch (error) {
         res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
     }
@@ -169,7 +244,8 @@ const createProperty = async (req, res) => {
             images: images || [],
             amenities: amenities || [],
             pricing: {
-                basePrice: pricing?.basePrice || 0,
+                weekdayPrice: pricing?.weekdayPrice || 0,
+                weekendPrice: pricing?.weekendPrice || 0,
                 priceDisplay: pricing?.priceDisplay || '',
                 pricePer: pricing?.pricePer || 'night'
             },
@@ -182,6 +258,11 @@ const createProperty = async (req, res) => {
             isActive: isActive !== undefined ? isActive : true,
             createdBy: req.user._id
         });
+
+        // ---- SYNC OWNER ----
+        if (owner) {
+            await User.findByIdAndUpdate(owner, { $addToSet: { properties: property._id } });
+        }
 
         res.status(201).json(property);
     } catch (error) {
@@ -206,6 +287,8 @@ const updateProperty = async (req, res) => {
 
         // ---- HANDLE SLUG REGENERATION IF NAME CHANGES ----
         let updatedFields = { ...req.body };
+        
+        const oldOwner = property.owner;
 
         if (req.body.name && req.body.name.trim() !== property.name) {
             updatedFields.slug = await generateUniqueSlug(req.body.name.trim(), property._id);
@@ -216,7 +299,8 @@ const updateProperty = async (req, res) => {
         // Merge pricing sub-document rather than replacing it entirely
         if (req.body.pricing) {
             updatedFields.pricing = {
-                basePrice: req.body.pricing.basePrice ?? property.pricing.basePrice,
+                weekdayPrice: req.body.pricing.weekdayPrice ?? property.pricing.weekdayPrice,
+                weekendPrice: req.body.pricing.weekendPrice ?? property.pricing.weekendPrice,
                 priceDisplay: req.body.pricing.priceDisplay ?? property.pricing.priceDisplay,
                 pricePer: req.body.pricing.pricePer ?? property.pricing.pricePer
             };
@@ -227,6 +311,16 @@ const updateProperty = async (req, res) => {
             updatedFields,
             { new: true, runValidators: true }
         ).populate('owner', 'name email');
+
+        // ---- SYNC OWNER IF CHANGED ----
+        if (req.body.owner !== undefined && String(oldOwner) !== String(req.body.owner)) {
+            if (oldOwner) {
+                await User.findByIdAndUpdate(oldOwner, { $pull: { properties: property._id } });
+            }
+            if (req.body.owner) {
+                await User.findByIdAndUpdate(req.body.owner, { $addToSet: { properties: property._id } });
+            }
+        }
 
         res.status(200).json(updatedProperty);
     } catch (error) {
@@ -250,11 +344,38 @@ const deleteProperty = async (req, res) => {
             return res.status(404).json({ message: 'PROPERTY NOT FOUND' });
         }
 
+        // 1. CHECK FOR UPCOMING ACTIVE BOOKINGS
+        const Booking = require('../models/Booking');
+        const activeBookings = await Booking.countDocuments({
+            property: property._id,
+            status: { $in: ['pending', 'confirmed'] },
+            checkOut: { $gt: new Date() }
+        });
+
+        if (activeBookings > 0) {
+            return res.status(400).json({ message: 'Cannot delete property with upcoming active bookings. Cancel them first.' });
+        }
+
+        // 2. CASCADE DELETIONS TO CLEAN UP ORPHANED RECORDS
+        const Review = require('../models/Review');
+        const BlockedDate = require('../models/BlockedDate');
+        const Package = require('../models/Package');
+        const Revenue = require('../models/Revenue');
+
+        await Promise.all([
+            Booking.deleteMany({ property: property._id }),
+            Review.deleteMany({ property: property._id }),
+            BlockedDate.deleteMany({ property: property._id }),
+            Package.deleteMany({ property: property._id }),
+            Revenue.deleteMany({ propertyId: property._id }),
+            User.updateMany({}, { $pull: { properties: property._id } }) // SYNC OWNER
+        ]);
+
         await property.deleteOne();
 
         res.status(200).json({
             id: req.params.id,
-            message: `PROPERTY "${property.name}" DELETED SUCCESSFULLY`
+            message: `PROPERTY "${property.name}" AND RELATED RECORDS DELETED SUCCESSFULLY`
         });
     } catch (error) {
         res.status(500).json({ message: `SERVER ERROR: ${error.message}` });

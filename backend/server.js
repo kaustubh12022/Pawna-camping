@@ -6,6 +6,9 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
+const compression = require('compression');
+const morgan = require('morgan');
 const connectDB = require('./config/db');
 
 // CONNECT TO DATABASE
@@ -15,9 +18,12 @@ connectDB();
 const app = express();
 
 // MIDDLEWARE FOR JSON, URLENCODED DATA, AND CORS
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(helmet()); // Add Helmet for security headers
+app.use(mongoSanitize()); // Prevent NoSQL Injection
+app.use(compression()); // Compress responses
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev')); // HTTP Logging
 
 // PRODUCTION & LOCALHOST CORS CONFIGURATION
 // Only allow requests from known frontend origins
@@ -35,6 +41,8 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
         "http://localhost:5177",
         "http://192.168.1.8:5173",
         "http://192.168.1.8:5174",
+        "http://192.168.1.10:5173",
+        "http://192.168.1.10:5174",
         "http://192.168.1.11:5173",
         "http://192.168.1.11:5174",
         "http://192.168.1.12:5173",
@@ -45,8 +53,11 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (Postman, curl, server-to-server)
-        if (!origin) return callback(null, true);
+        // Allow requests with no origin ONLY in development
+        if (!origin) {
+            if (process.env.NODE_ENV !== 'production') return callback(null, true);
+            return callback(new Error(`CORS: Missing Origin header not allowed in production`));
+        }
         if (allowedOrigins.includes(origin)) return callback(null, true);
         callback(new Error(`CORS: Origin ${origin} not allowed`));
     },
@@ -66,7 +77,18 @@ const bookingLimiter = rateLimit({
     }
 });
 
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10,                   // Max 10 login attempts per IP per 15 min
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        message: 'Too many login attempts from this IP. Please try again in 15 minutes.'
+    }
+});
+
 // DEFINE ROUTES
+app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth', require('./routes/authRoutes'));
 
 // Apply rate limit ONLY to the public POST booking creation
@@ -85,6 +107,7 @@ app.use('/api/reviews', require('./routes/reviewRoutes'));       // Public revie
 app.use('/api/upload', require('./routes/uploadRoutes'));        // Cloudinary image upload
 app.use('/api/notifications', require('./routes/notificationRoutes')); // Web-push notifications
 app.use('/api/blocked-dates', require('./routes/blockedDateRoutes')); // Owner blocked dates
+app.use('/api/promotions', require('./routes/promotionRoutes'));      // Dynamic promotional engine
 
 // HEALTH CHECK & ROOT ROUTE
 app.get('/', (req, res) => {
@@ -105,6 +128,17 @@ app.use((err, req, res, next) => {
 
 // START SERVER
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[ SUCCESS ] SERVER RUNNING IN ${process.env.NODE_ENV} MODE ON PORT ${PORT}`);
+});
+
+// UNHANDLED REJECTION AND EXCEPTION HANDLERS
+process.on('unhandledRejection', (err) => {
+    console.error(`[ FATAL ERROR ] Unhandled Rejection: ${err.message}`);
+    server.close(() => process.exit(1));
+});
+
+process.on('uncaughtException', (err) => {
+    console.error(`[ FATAL ERROR ] Uncaught Exception: ${err.message}`);
+    process.exit(1);
 });

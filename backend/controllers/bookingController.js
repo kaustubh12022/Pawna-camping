@@ -78,8 +78,25 @@ const createBooking = async (req, res) => {
             foodPreference,
             customerName,
             customerPhone,
-            propertyId      // PHASE 2: Optional — null for legacy bookings
+            totalPrice,     // PHASE 2: Accept calculated total price
+            propertyId,      // PHASE 2: Optional — null for legacy bookings
+            botField        // Spam prevention honeypot
         } = req.body;
+
+        // SPAM PREVENTION (Honeypot)
+        if (botField) {
+            // A bot filled in the hidden field
+            return res.status(400).json({ message: 'Invalid request payload' });
+        }
+
+        // PAST DATE VALIDATION
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const checkInDate = new Date(checkIn);
+        checkInDate.setHours(0, 0, 0, 0);
+        if (checkInDate < today) {
+            return res.status(400).json({ message: 'Check-in date cannot be in the past' });
+        }
 
         // PHASE 2: Resolve property and propertyType if propertyId is given
         let propertyRef = null;
@@ -106,7 +123,7 @@ const createBooking = async (req, res) => {
             
             if (blocked) {
                 return res.status(400).json({
-                    message: `These dates are blocked by the property owner. Reason: ${blocked.reason || 'Not specified'}`
+                    message: 'Sorry, these dates are already booked.'
                 });
             }
         }
@@ -134,6 +151,7 @@ const createBooking = async (req, res) => {
             foodPreference: isVilla ? undefined : foodPreference,
             customerName,
             customerPhone,
+            totalPrice: totalPrice || 0,
             addedBy: req.user ? req.user._id : undefined,
             property: propertyRef,
             propertyType: propertyType
@@ -161,15 +179,12 @@ const createBooking = async (req, res) => {
                 url: '/owner/dashboard'
             });
 
-            owners.forEach(async (owner) => {
-                if (owner.pushSubscription) {
-                    try {
-                        await webpush.sendNotification(owner.pushSubscription, payload);
-                    } catch (pushErr) {
-                        console.error('Push error for owner', owner.email, pushErr);
-                    }
-                }
-            });
+            const pushPromises = owners
+                .filter(owner => owner.pushSubscription)
+                .map(owner => webpush.sendNotification(owner.pushSubscription, payload)
+                    .catch(pushErr => console.error('Push error for owner', owner.email, pushErr))
+                );
+            await Promise.allSettled(pushPromises);
         } catch (err) {
             console.error('Error in sending push notification', err);
         }
@@ -281,7 +296,7 @@ const updateBookingStatus = async (req, res) => {
                 
                 if (blocked) {
                     return res.status(400).json({
-                        message: `Cannot confirm booking. Dates are blocked by owner. Reason: ${blocked.reason || 'Not specified'}`
+                        message: 'Cannot confirm booking. Sorry, these dates are already booked.'
                     });
                 }
             }

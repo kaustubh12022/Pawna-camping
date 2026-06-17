@@ -38,7 +38,12 @@ const createReview = async (req, res) => {
         if (!property || !reviewerName || !rating || !text) {
             return res.status(400).json({ message: 'All fields are required' });
         }
-        // Validate property exists
+        // Validate property exists (Handle invalid ObjectIds gracefully)
+        const mongoose = require('mongoose');
+        if (!mongoose.Types.ObjectId.isValid(property)) {
+            return res.status(400).json({ message: 'Invalid property ID' });
+        }
+        
         const exists = await Property.findById(property).select('_id').lean();
         if (!exists) return res.status(404).json({ message: 'Property not found' });
 
@@ -54,10 +59,50 @@ const deleteReview = async (req, res) => {
     try {
         const review = await Review.findByIdAndDelete(req.params.id);
         if (!review) return res.status(404).json({ message: 'Review not found' });
+        
+        // Recalculate if it was an approved review
+        if (review.isApproved) {
+            await Review.calculateAverageRating(review.property);
+        }
+        
         res.json({ message: 'Deleted' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
-module.exports = { getReviews, getReviewsByProperty, createReview, deleteReview };
+// GET /api/reviews/pending  — manager only (unapproved reviews)
+const getPendingReviews = async (req, res) => {
+    try {
+        const reviews = await Review.find({ isApproved: false })
+            .populate('property', 'name type')
+            .sort({ createdAt: -1 })
+            .lean();
+        res.json(reviews);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// PATCH /api/reviews/:id/approve  — manager only
+const approveReview = async (req, res) => {
+    try {
+        const review = await Review.findByIdAndUpdate(
+            req.params.id,
+            { isApproved: true },
+            { new: true }
+        ).populate('property', 'name type');
+
+        if (!review) return res.status(404).json({ message: 'Review not found' });
+        
+        // Recalculate property average rating
+        await Review.calculateAverageRating(review.property._id);
+
+        res.json(review);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+module.exports = { getReviews, getReviewsByProperty, createReview, deleteReview, getPendingReviews, approveReview };
+

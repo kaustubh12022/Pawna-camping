@@ -42,12 +42,17 @@ const bookingSchema = new mongoose.Schema({
     },
     customerPhone: {
         type: String,
-        required: [true, 'Customer phone is required']
+        required: [true, 'Customer phone is required'],
+        match: [/^[+]?[0-9\s-]{10,15}$/, 'Invalid phone number format']
     },
     status: {
         type: String,
         enum: ['pending', 'confirmed', 'cancelled'],
         default: 'pending'
+    },
+    totalPrice: {
+        type: Number,
+        default: 0
     },
     addedBy: {
         type: mongoose.Schema.Types.ObjectId,

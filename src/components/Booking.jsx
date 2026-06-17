@@ -19,10 +19,12 @@ const Booking = () => {
         firstName: '',
         lastName: '',
         email: '',
-        phone: ''
+        phone: '',
+        botField: '' // Honeypot field for spam prevention
     });
     
     const [nights, setNights] = useState(0);
+    const [calculatedPrice, setCalculatedPrice] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [apiError, setApiError] = useState(null);
     const [whatsappNumber, setWhatsappNumber] = useState('919975526627');
@@ -34,10 +36,46 @@ const Booking = () => {
             const diffTime = Math.abs(end - start);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             setNights(diffDays > 0 ? diffDays : 0);
+            
+            // Calculate price
+            if (formData.propertyId && diffDays > 0) {
+                const selectedProp = properties.find(p => p._id === formData.propertyId);
+                let weekdayPrice = 0;
+                let weekendPrice = 0;
+                let perUnitMultiplier = 1; // 1 for property, guests for per-person
+
+                if (selectedProp && selectedProp.type === 'villa') {
+                    weekdayPrice = selectedProp.pricing?.weekdayPrice || 0;
+                    weekendPrice = selectedProp.pricing?.weekendPrice || 0;
+                } else if (formData.packageType && availablePackages.length > 0) {
+                    const selectedPkg = availablePackages.find(p => p.title === formData.packageType);
+                    if (selectedPkg) {
+                        weekdayPrice = selectedPkg.weekdayPrice || 0;
+                        weekendPrice = selectedPkg.weekendPrice || 0;
+                        perUnitMultiplier = Number(formData.guests) || 1; // Assuming campsite packages are per person
+                    }
+                }
+
+                let total = 0;
+                let current = new Date(start);
+                for (let i = 0; i < diffDays; i++) {
+                    let day = current.getDay();
+                    if (day === 0 || day === 6) {
+                        total += weekendPrice;
+                    } else {
+                        total += weekdayPrice;
+                    }
+                    current.setDate(current.getDate() + 1);
+                }
+                setCalculatedPrice(total * perUnitMultiplier);
+            } else {
+                setCalculatedPrice(0);
+            }
         } else {
             setNights(0);
+            setCalculatedPrice(0);
         }
-    }, [formData.checkIn, formData.checkOut]);
+    }, [formData.checkIn, formData.checkOut, formData.propertyId, formData.packageType, formData.guests, properties, availablePackages]);
 
     // Fetch Properties
     useEffect(() => {
@@ -195,7 +233,9 @@ const Booking = () => {
             nonVegGuests: selectedProp?.type === 'villa' ? 0 : Number(formData.nonVegCount),
             foodPreference: selectedProp?.type === 'villa' ? 'N/A' : dominantFoodPreference,
             customerName: `${formData.firstName} ${formData.lastName}`,
-            customerPhone: formData.phone
+            customerPhone: formData.phone,
+            totalPrice: calculatedPrice,
+            botField: formData.botField
         };
 
         try {
@@ -219,7 +259,7 @@ const Booking = () => {
                 message += `\n🥗 *Veg:* ${formData.vegCount} | 🍗 *Non-Veg:* ${formData.nonVegCount}`;
             }
             
-            message += `\n\n👤 *Name:* ${formData.firstName} ${formData.lastName}\n📞 *Phone:* ${formData.phone}\n📧 *Email:* ${formData.email}\n\n✨ *Looking forward to an amazing stay!* ✨`;
+            message += `\n\n💰 *Total Price:* ₹${calculatedPrice.toLocaleString('en-IN')}\n\n👤 *Name:* ${formData.firstName} ${formData.lastName}\n📞 *Phone:* ${formData.phone}\n📧 *Email:* ${formData.email}\n\n✨ *Looking forward to an amazing stay!* ✨`;
 
             const encodedMessage = encodeURIComponent(message);
             // Use property specific WhatsApp if available, fallback to global
@@ -323,7 +363,7 @@ const Booking = () => {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                         <div className="space-y-1.5 sm:space-y-2">
                                             <label className="text-xs sm:text-sm font-medium text-[var(--listing-text-primary)]">Check-in Date</label>
-                                            <input type="date" name="checkIn" value={formData.checkIn} onChange={handleChange} className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-[var(--listing-border)] focus:outline-none focus:ring-2 focus:ring-[var(--listing-accent)]/20 focus:border-[var(--listing-accent)] transition-all bg-[var(--listing-bg)] text-[var(--listing-text-primary)] font-light text-sm sm:text-base" required />
+                                            <input type="date" name="checkIn" min={new Date().toISOString().split('T')[0]} value={formData.checkIn} onChange={handleChange} className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-[var(--listing-border)] focus:outline-none focus:ring-2 focus:ring-[var(--listing-accent)]/20 focus:border-[var(--listing-accent)] transition-all bg-[var(--listing-bg)] text-[var(--listing-text-primary)] font-light text-sm sm:text-base" required />
                                         </div>
                                         <div className="space-y-1.5 sm:space-y-2">
                                             <label className="text-xs sm:text-sm font-medium text-[var(--listing-text-primary)]">Check-out Date</label>
@@ -392,9 +432,12 @@ const Booking = () => {
                                         </div>
                                         <div className="space-y-1.5 sm:space-y-2">
                                             <label className="text-xs sm:text-sm font-medium text-[var(--listing-text-primary)]">Phone Number</label>
-                                            <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="+91 98765 43210" className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-[var(--listing-border)] focus:outline-none focus:ring-2 focus:ring-[var(--listing-accent)]/20 focus:border-[var(--listing-accent)] transition-all bg-[var(--listing-bg)] text-[var(--listing-text-primary)] font-light text-sm sm:text-base" required />
+                                            <input type="tel" name="phone" pattern="[0-9+\s-]{10,15}" value={formData.phone} onChange={handleChange} placeholder="+91 98765 43210" className="w-full px-4 sm:px-5 py-3 sm:py-4 rounded-xl border border-[var(--listing-border)] focus:outline-none focus:ring-2 focus:ring-[var(--listing-accent)]/20 focus:border-[var(--listing-accent)] transition-all bg-[var(--listing-bg)] text-[var(--listing-text-primary)] font-light text-sm sm:text-base" required />
                                         </div>
                                     </div>
+                                    
+                                    {/* Honeypot field (invisible to users) */}
+                                    <input type="text" name="botField" value={formData.botField} onChange={handleChange} style={{ display: 'none' }} tabIndex="-1" autoComplete="off" />
 
                                     <div className="flex gap-3 sm:gap-4 mt-6 sm:mt-8">
                                         <button type="button" onClick={prevStep} className="w-1/3 py-3.5 sm:py-4 border border-[var(--listing-border)] text-[var(--listing-text-primary)] rounded-xl text-xs sm:text-sm font-medium tracking-wide hover:bg-[var(--listing-bg)] transition-colors active:scale-[0.98]">
@@ -444,6 +487,12 @@ const Booking = () => {
                                             <span className="text-sm font-medium text-[var(--listing-text-secondary)] flex items-center gap-2"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg> Duration</span>
                                             <span className="text-sm text-[var(--listing-text-primary)] font-medium">{nights} Night{nights > 1 ? 's' : ''}</span>
                                         </div>
+                                        {calculatedPrice > 0 && (
+                                            <div className="flex items-center justify-between border-b border-[var(--listing-border)] pb-5">
+                                                <span className="text-sm font-medium text-[var(--listing-text-secondary)] flex items-center gap-2"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> Total Price</span>
+                                                <span className="text-sm text-[var(--listing-text-primary)] font-medium text-emerald-600">₹{calculatedPrice.toLocaleString('en-IN')}</span>
+                                            </div>
+                                        )}
                                         {isCampsite && (
                                             <div className="flex items-center justify-between border-b border-[var(--listing-border)] pb-5">
                                                 <span className="text-sm font-medium text-[var(--listing-text-secondary)] flex items-center gap-2"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg> Meals ({formData.guests})</span>

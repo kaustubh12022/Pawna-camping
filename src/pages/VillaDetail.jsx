@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Helmet } from 'react-helmet-async';
+import { usePromotion } from '../context/PromotionContext';
+import Reviews from '../components/Reviews';
 
 const isVideo = (url) => {
     if (!url) return false;
@@ -19,6 +22,7 @@ const MediaRenderer = ({ src, alt, className }) => {
 const VillaDetail = () => {
     const { slug } = useParams();
     const navigate = useNavigate();
+    const { discountPercent, calculateMRP } = usePromotion();
     const [property, setProperty] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [activeImage, setActiveImage] = useState(0);
@@ -88,6 +92,10 @@ const VillaDetail = () => {
 
     return (
         <div className="min-h-screen bg-[var(--listing-bg)] text-[var(--listing-text-primary)] pb-20 lg:pb-0 transition-colors duration-500">
+            <Helmet>
+                <title>{property.name} | Luxury Villas</title>
+                <meta name="description" content={property.shortDescription || 'Experience luxury with our exclusive villas.'} />
+            </Helmet>
             {/* Top Navigation */}
             <div className="sticky top-0 z-50 bg-[var(--listing-bg)]/80 backdrop-blur-xl border-b border-[var(--listing-border)] transition-colors duration-500">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
@@ -172,6 +180,15 @@ const VillaDetail = () => {
                                         View on Map
                                     </a>
                                 )}
+                                {property.averageRating > 0 && (
+                                    <span className="flex items-center gap-1.5">
+                                        <svg className="w-4 h-4 text-yellow-500 fill-current" viewBox="0 0 20 20">
+                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                        </svg>
+                                        <span className="font-medium text-[var(--listing-text-primary)]">{property.averageRating}</span> 
+                                        <span>({property.reviewCount} reviews)</span>
+                                    </span>
+                                )}
                                 <span className="flex items-center gap-1.5"><svg className="w-4 h-4 text-[var(--listing-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg> Max {property.maxGuests} Guests</span>
                             </div>
 
@@ -232,19 +249,30 @@ const VillaDetail = () => {
                                     <div className="flex justify-between items-baseline mb-2">
                                         <span className="text-sm text-[var(--listing-text-secondary)]">Price per night</span>
                                         <div className="flex flex-col items-end">
-                                            {property.pricing?.discountPrice ? (
-                                                <>
-                                                    <span className="text-sm line-through text-[var(--listing-text-secondary)]">₹{property.pricing.basePrice}</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-2xl font-bold">₹{property.pricing.discountPrice}</span>
-                                                        <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500 text-white rounded-md">
-                                                            {property.discountPercent}% OFF
-                                                        </span>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <span className="text-2xl font-bold">₹{property.pricing?.basePrice}</span>
-                                            )}
+                                            {(() => {
+                                                const finalPrice = property.pricing?.weekdayPrice !== property.pricing?.weekendPrice 
+                                                    ? property.pricing?.weekdayPrice 
+                                                    : (property.pricing?.weekdayPrice || property.pricing?.basePrice);
+                                                
+                                                const originalPrice = calculateMRP(finalPrice);
+                                                
+                                                return (
+                                                    <>
+                                                        {originalPrice > finalPrice && (
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-sm line-through opacity-60 text-[var(--listing-text-secondary)]">₹{originalPrice.toLocaleString('en-IN')}</span>
+                                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white bg-red-500 shadow-sm">{discountPercent}% OFF</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-center gap-2">
+                                                            {property.pricing?.weekdayPrice !== property.pricing?.weekendPrice && (
+                                                                <span className="text-sm text-[var(--listing-text-secondary)]">From</span>
+                                                            )}
+                                                            <span className="text-2xl font-bold">₹{finalPrice?.toLocaleString('en-IN')}</span>
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                     <div className="text-[11px] text-[var(--listing-text-secondary)] text-right">
@@ -296,20 +324,31 @@ const VillaDetail = () => {
             {/* Mobile: Fixed Bottom Booking Bar */}
             <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#FDFBF7]/95 backdrop-blur-xl border-t border-[#E8E1D9] px-4 py-3 flex items-center justify-between safe-bottom">
                     <div className="flex flex-col">
-                        {property.pricing?.discountPrice ? (
-                            <>
-                                <span className="text-xs line-through opacity-60 text-[#7A6A5E]">₹{property.pricing.basePrice}</span>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-xl font-serif font-bold text-[#2C1D10]">₹{property.pricing.discountPrice}</span>
-                                    <span className="text-[#7A6A5E] font-light text-xs">/ {property.pricing?.pricePer}</span>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-xl font-serif font-bold text-[#2C1D10]">₹{property.pricing?.basePrice}</span>
-                                <span className="text-[#7A6A5E] font-light text-xs">/ {property.pricing?.pricePer}</span>
-                            </div>
-                        )}
+                        {(() => {
+                            const finalPrice = property.pricing?.weekdayPrice !== property.pricing?.weekendPrice 
+                                ? property.pricing?.weekdayPrice 
+                                : (property.pricing?.weekdayPrice || property.pricing?.basePrice);
+                            
+                            const originalPrice = calculateMRP(finalPrice);
+                            
+                            return (
+                                <>
+                                    {originalPrice > finalPrice && (
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <span className="text-xs line-through opacity-60 text-[#7A6A5E]">₹{originalPrice.toLocaleString('en-IN')}</span>
+                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white bg-red-500 shadow-sm">{discountPercent}% OFF</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-baseline gap-1">
+                                        {property.pricing?.weekdayPrice !== property.pricing?.weekendPrice && (
+                                            <span className="text-xs opacity-60 text-[#7A6A5E]">From</span>
+                                        )}
+                                        <span className="text-xl font-serif font-bold text-[#2C1D10]">₹{finalPrice?.toLocaleString('en-IN')}</span>
+                                        <span className="text-[#7A6A5E] font-light text-xs">/ {property.pricing?.pricePer}</span>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 <button
                     onClick={handleBookVilla}
@@ -318,6 +357,9 @@ const VillaDetail = () => {
                     Contact Owner
                 </button>
             </div>
+
+            {/* Reviews Section */}
+            <Reviews propertyId={property._id} />
 
             {/* Footer */}
             <div className="border-t border-[#E8E1D9] py-8 sm:py-12 text-center bg-[#FAF7F2]">

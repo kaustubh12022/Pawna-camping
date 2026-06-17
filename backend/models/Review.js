@@ -35,8 +35,39 @@ const reviewSchema = new mongoose.Schema({
     },
     isApproved: {
         type: Boolean,
-        default: true
+        default: false  // Requires manager approval before being publicly visible
     }
 }, { timestamps: true });
+
+reviewSchema.statics.calculateAverageRating = async function(propertyId) {
+    const stats = await this.aggregate([
+        {
+            $match: { property: propertyId, isApproved: true }
+        },
+        {
+            $group: {
+                _id: '$property',
+                averageRating: { $avg: '$rating' },
+                reviewCount: { $sum: 1 }
+            }
+        }
+    ]);
+
+    try {
+        if (stats.length > 0) {
+            await mongoose.model('Property').findByIdAndUpdate(propertyId, {
+                averageRating: Math.round(stats[0].averageRating * 10) / 10,
+                reviewCount: stats[0].reviewCount
+            });
+        } else {
+            await mongoose.model('Property').findByIdAndUpdate(propertyId, {
+                averageRating: 0,
+                reviewCount: 0
+            });
+        }
+    } catch (err) {
+        console.error('Error calculating average rating', err);
+    }
+};
 
 module.exports = mongoose.model('Review', reviewSchema);

@@ -7,11 +7,23 @@ const mongoose = require('mongoose');
 const getBlockedDates = async (req, res) => {
     try {
         const { propertyId } = req.query;
-        if (!propertyId) {
+        let query = {};
+
+        if (propertyId) {
+            query.property = propertyId;
+        } else if (req.user && req.user.role === 'owner') {
+            const ownerPropertyIds = req.user.properties || [];
+            if (ownerPropertyIds.length === 0) {
+                return res.status(200).json([]);
+            }
+            query.property = { $in: ownerPropertyIds };
+        } else if (req.user && req.user.role === 'manager') {
+            // Manager requesting all blocked dates
+        } else {
             return res.status(400).json({ message: 'propertyId is required' });
         }
 
-        const blockedDates = await BlockedDate.find({ property: propertyId });
+        const blockedDates = await BlockedDate.find(query);
         res.status(200).json(blockedDates);
     } catch (error) {
         res.status(500).json({ message: `SERVER ERROR: ${error.message}` });

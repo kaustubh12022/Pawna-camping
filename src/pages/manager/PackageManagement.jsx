@@ -14,7 +14,7 @@ const PackageManagement = ({ propertyId, propertyName, onBack }) => {
     const [formData, setFormData] = useState(getEmptyForm());
 
     function getEmptyForm() {
-        return { title: '', description: '', features: [''], price: '', priceValue: 0, maxCapacity: 10, image: '' };
+        return { title: '', description: '', features: [''], price: '', weekdayPrice: 0, weekendPrice: 0, maxCapacity: 10, image: '' };
     }
 
     const token = () => localStorage.getItem('managerToken');
@@ -52,7 +52,7 @@ const PackageManagement = ({ propertyId, propertyName, onBack }) => {
         setEditingId(pkg._id);
         setFormData({
             title: pkg.title, description: pkg.description || '', features: pkg.features?.length ? [...pkg.features] : [''],
-            price: pkg.price || '', priceValue: pkg.priceValue || 0, maxCapacity: pkg.maxCapacity || 10, image: pkg.image || ''
+            price: pkg.price || '', weekdayPrice: pkg.weekdayPrice || 0, weekendPrice: pkg.weekendPrice || 0, maxCapacity: pkg.maxCapacity || 10, image: pkg.image || ''
         });
         setShowForm(true);
     };
@@ -141,10 +141,10 @@ const PackageManagement = ({ propertyId, propertyName, onBack }) => {
                                 <input type="text" required value={formData.title} onChange={e => setFormData(p => ({ ...p, title: e.target.value }))}
                                     className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1.5">Display Price</label>
-                                    <input type="text" placeholder="₹1,200" value={formData.price} onChange={e => setFormData(p => ({ ...p, price: e.target.value }))}
+                                    <input type="text" placeholder="e.g. ₹1,200 - ₹1,500" value={formData.price} onChange={e => setFormData(p => ({ ...p, price: e.target.value }))}
                                         className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                                 </div>
                                 <div>
@@ -152,6 +152,18 @@ const PackageManagement = ({ propertyId, propertyName, onBack }) => {
                                     <input type="number" min={0} value={formData.maxCapacity} onChange={e => setFormData(p => ({ ...p, maxCapacity: Number(e.target.value) }))}
                                         className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                                     <p className="text-[10px] text-stone-400 mt-1">0 = Unlimited</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1.5">Weekday Price (₹)</label>
+                                    <input type="number" value={formData.weekdayPrice} onChange={e => setFormData(p => ({ ...p, weekdayPrice: Number(e.target.value) }))}
+                                        className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1.5">Weekend Price (₹)</label>
+                                    <input type="number" value={formData.weekendPrice} onChange={e => setFormData(p => ({ ...p, weekendPrice: Number(e.target.value) }))}
+                                        className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                                 </div>
                             </div>
                             <div>

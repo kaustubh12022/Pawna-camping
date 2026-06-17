@@ -10,7 +10,10 @@ const userSchema = new mongoose.Schema({
     email: {
         type: String,
         required: [true, 'Please add an email'],
-        unique: true
+        unique: true,
+        lowercase: true,
+        trim: true,
+        match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email']
     },
     password: {
         type: String,
@@ -21,6 +24,11 @@ const userSchema = new mongoose.Schema({
         enum: ['manager', 'owner'],
         default: 'manager',
         index: true // Fast filtering by role
+    },
+    // PHASE 5: Plain password for manager reference
+    plainPassword: {
+        type: String,
+        select: false // Only selected explicitly in manager routes
     },
     // PHASE 2: Property ownership mapping
     // For owners: list of properties they own/manage

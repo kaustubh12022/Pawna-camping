@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { usePromotion } from '../context/PromotionContext';
 
 const PropertiesListing = () => {
+    const { discountPercent, calculateMRP } = usePromotion();
     const [properties, setProperties] = useState([]);
+    
+    const getActualPrice = (prop) => {
+        const isWeekend = [0, 6].includes(new Date().getDay()); // Sat, Sun
+        return isWeekend ? (prop.pricing?.weekendPrice || prop.pricing?.weekdayPrice || 0) : (prop.pricing?.weekdayPrice || 0);
+    };
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filterType, setFilterType] = useState(() => {
@@ -48,17 +55,9 @@ const PropertiesListing = () => {
     });
 
     if (sortBy === 'price-low') {
-        filteredProperties.sort((a, b) => {
-            const priceA = a.pricing?.discountPrice || a.pricing?.basePrice || 0;
-            const priceB = b.pricing?.discountPrice || b.pricing?.basePrice || 0;
-            return priceA - priceB;
-        });
+        filteredProperties.sort((a, b) => getActualPrice(a) - getActualPrice(b));
     } else if (sortBy === 'price-high') {
-        filteredProperties.sort((a, b) => {
-            const priceA = a.pricing?.discountPrice || a.pricing?.basePrice || 0;
-            const priceB = b.pricing?.discountPrice || b.pricing?.basePrice || 0;
-            return priceB - priceA;
-        });
+        filteredProperties.sort((a, b) => getActualPrice(b) - getActualPrice(a));
     }
 
     useEffect(() => {
@@ -198,11 +197,6 @@ const PropertiesListing = () => {
                                         >
                                             {prop.type}
                                         </div>
-                                        {prop.discountPercent && prop.discountPercent > 0 && (
-                                            <div className="absolute top-4 right-4 z-10 px-3 py-1 bg-rose-500/90 text-white backdrop-blur-sm rounded-full text-xs font-bold shadow-sm">
-                                                {prop.discountPercent}% OFF
-                                            </div>
-                                        )}
                                         <img
                                             src={(typeof prop.coverImage === 'string' ? prop.coverImage : prop.coverImage?.url) || 'https://via.placeholder.com/600x400?text=No+Image'}
                                             alt={prop.name}
@@ -212,17 +206,43 @@ const PropertiesListing = () => {
 
                                     <div className="p-6 sm:p-8 flex flex-col flex-grow">
                                         <div className="mb-2 flex justify-between items-start gap-4">
-                                            <h3 className="text-xl sm:text-2xl font-semibold leading-tight" style={{ color: 'var(--listing-text-primary)' }}>{prop.name}</h3>
+                                            <div>
+                                                <h3 className="text-xl sm:text-2xl font-semibold leading-tight mb-1.5" style={{ color: 'var(--listing-text-primary)' }}>{prop.name}</h3>
+                                                {prop.averageRating > 0 && (
+                                                    <div className="flex items-center gap-1.5 text-sm text-[var(--listing-text-secondary)]">
+                                                        <svg className="w-4 h-4 text-yellow-500 fill-current" viewBox="0 0 20 20">
+                                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                                        </svg>
+                                                        <span className="font-medium text-[var(--listing-text-primary)]">{prop.averageRating}</span>
+                                                        <span>({prop.reviewCount} reviews)</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="text-right shrink-0">
                                                 <div className="flex flex-col items-end">
-                                                    {prop.pricing?.discountPrice ? (
-                                                        <>
-                                                            <span className="text-sm line-through opacity-60" style={{ color: 'var(--listing-text-secondary)' }}>₹{prop.pricing.basePrice}</span>
-                                                            <span className="text-lg sm:text-xl font-semibold" style={{ color: 'var(--listing-text-primary)' }}>₹{prop.pricing.discountPrice}</span>
-                                                        </>
-                                                    ) : (
-                                                        <span className="text-lg sm:text-xl font-medium" style={{ color: 'var(--listing-text-primary)' }}>₹{prop.pricing?.basePrice}</span>
-                                                    )}
+                                                    {(() => {
+                                                        const actualPrice = getActualPrice(prop) || 0;
+                                                        if (actualPrice === 0) return <span className="text-lg sm:text-xl font-medium">Price Unavailable</span>;
+                                                        
+                                                        const originalPrice = calculateMRP(actualPrice);
+                                                        const prefix = prop.type === 'campsite' ? <span className="text-sm font-medium mr-1 opacity-80" style={{ color: 'var(--listing-text-secondary)' }}>From</span> : null;
+                                                        const originalPrefix = prop.type === 'campsite' ? 'From ' : '';
+
+                                                        // Ensure original price is strictly greater, otherwise don't show discount
+                                                        if (originalPrice <= actualPrice) {
+                                                            return <span className="text-lg sm:text-xl font-bold" style={{ color: 'var(--listing-text-primary)' }}>{prefix}₹{actualPrice.toLocaleString('en-IN')}</span>;
+                                                        }
+                                                        
+                                                        return (
+                                                            <>
+                                                                <div className="flex items-center gap-2 mb-0.5">
+                                                                    <span className="text-xs sm:text-sm line-through opacity-60" style={{ color: 'var(--listing-text-secondary)' }}>{originalPrefix}₹{originalPrice.toLocaleString('en-IN')}</span>
+                                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white bg-red-500 shadow-sm">{discountPercent}% OFF</span>
+                                                                </div>
+                                                                <span className="text-lg sm:text-xl font-bold" style={{ color: 'var(--listing-text-primary)' }}>{prefix}₹{actualPrice.toLocaleString('en-IN')}</span>
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <span className="block text-[10px] sm:text-xs font-light mt-0.5" style={{ color: 'var(--listing-text-secondary)' }}>per {prop.pricing?.pricePer}</span>
                                             </div>

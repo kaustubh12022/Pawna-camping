@@ -17,13 +17,14 @@ import {
     PieChart as PieChartIcon
 } from 'lucide-react';
 import PackageManagement from './manager/PackageManagement';
+import BlockedDatesManagement from './owner/BlockedDatesManagement';
 import ManualInstallButton from '../components/ManualInstallButton';
 
 const COLORS = ['#10b981', '#0ea5e9', '#f59e0b', '#8b5cf6'];
 const API = import.meta.env.VITE_API_URL || '';
 
 const OwnerDashboard = () => {
-    const [activeTab, setActiveTab] = useState('analytics'); // analytics, packages, revenue
+    const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, analytics, packages, revenue, blocked-dates
     const [ownerProfile, setOwnerProfile] = useState(null);
     const [selectedProperty, setSelectedProperty] = useState('all');
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -51,8 +52,21 @@ const OwnerDashboard = () => {
     // Fetch Profile for properties list
     useEffect(() => {
         const fetchProfile = async () => {
+            const isTokenExpired = (token) => {
+                if (!token) return true;
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    return payload.exp * 1000 < Date.now();
+                } catch (e) {
+                    return true;
+                }
+            };
+
             const token = localStorage.getItem('ownerToken');
-            if (!token) return navigate('/owner/login');
+            if (!token || isTokenExpired(token)) {
+                localStorage.removeItem('ownerToken');
+                return navigate('/owner/login');
+            }
             try {
                 const res = await fetch(`${API}/api/auth/me`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -233,6 +247,8 @@ const OwnerDashboard = () => {
         : ownerProfile?.properties?.find(p => p._id === selectedProperty);
     const currentPropertyName = currentPropertyObj ? currentPropertyObj.name : 'All Properties';
 
+    const hasOnlyVillas = ownerProfile?.properties?.length > 0 && ownerProfile.properties.every(p => p.type === 'villa');
+
     return (
         <div className="min-h-screen bg-[#f3f4f6] flex flex-col">
             {/* TOP NAVBAR */}
@@ -380,10 +396,14 @@ const OwnerDashboard = () => {
                 <div className="max-w-7xl mx-auto space-y-8 px-4 lg:px-8">
                     {/* TABS & FILTERS */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex bg-stone-100 p-1 rounded-xl w-full sm:w-auto">
+                        <div className="flex flex-wrap bg-stone-100 p-1 rounded-xl w-full sm:w-auto gap-1">
+                            <button onClick={() => setActiveTab('dashboard')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'dashboard' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Dashboard</button>
                             <button onClick={() => setActiveTab('analytics')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'analytics' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Analytics</button>
-                            <button onClick={() => setActiveTab('packages')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'packages' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Packages</button>
+                            {!hasOnlyVillas && (
+                                <button onClick={() => setActiveTab('packages')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'packages' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Packages</button>
+                            )}
                             <button onClick={() => setActiveTab('revenue')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'revenue' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Revenue</button>
+                            <button onClick={() => setActiveTab('blocked-dates')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'blocked-dates' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Blocked Dates</button>
                         </div>
 
                         <div className="flex items-center bg-white border border-stone-200 rounded-xl px-3 py-1.5 shadow-sm focus-within:ring-2 focus-within:ring-[#2B3440] transition-all">
@@ -406,7 +426,7 @@ const OwnerDashboard = () => {
                         </div>
                     </div>
 
-                    {activeTab === 'packages' && (
+                    {!hasOnlyVillas && activeTab === 'packages' && (
                         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-6 lg:p-8">
                             <PackageManagement 
                                 propertyId={selectedProperty !== 'all' ? selectedProperty : null} 
@@ -464,7 +484,16 @@ const OwnerDashboard = () => {
                         </div>
                     )}
 
-                    {activeTab === 'analytics' && (
+                    {activeTab === 'blocked-dates' && (
+                        <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-6 lg:p-8">
+                            <BlockedDatesManagement 
+                                selectedProperty={selectedProperty} 
+                                properties={ownerProfile?.properties || []} 
+                            />
+                        </div>
+                    )}
+
+                    {activeTab === 'dashboard' && (
                         <>
                             {selectedDate && (
                                 <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#2B3440] text-white text-xs font-bold tracking-wider rounded-lg shadow-sm w-max">
@@ -604,7 +633,33 @@ const OwnerDashboard = () => {
                                             )}
                                         </div>
                                     )}
+                                </>
+                            )}
+                        </>
+                    )}
 
+                    {activeTab === 'analytics' && (
+                        <>
+                            {selectedDate && (
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#2B3440] text-white text-xs font-bold tracking-wider rounded-lg shadow-sm w-max">
+                                    <span className="animate-pulse">🟢</span> SHOWING OCCUPANCY FOR: {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                </div>
+                            )}
+
+                            {error && (
+                                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-medium">
+                                    {error}
+                                </div>
+                            )}
+
+                            {!hasData ? (
+                                <div className="bg-white rounded-3xl p-12 text-center shadow-sm border border-stone-100">
+                                    <div className="text-stone-400 text-6xl mb-4">📊</div>
+                                    <h3 className="text-xl font-bold text-stone-900">No data yet.</h3>
+                                    <p className="text-stone-500 mt-2">Charts will appear here once bookings are received.</p>
+                                </div>
+                            ) : (
+                                <>
                                     {/* CHARTS CONTAINER */}
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                         <div className="bg-white p-8 rounded-3xl shadow-sm border border-stone-100 col-span-1">

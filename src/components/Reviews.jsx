@@ -4,14 +4,14 @@ import { X } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || '';
 
-const Reviews = () => {
+const Reviews = ({ propertyId }) => {
     const [reviews, setReviews] = useState([]);
     const [properties, setProperties] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     
     const [formData, setFormData] = useState({
-        property: '',
+        property: propertyId || '',
         reviewerName: '',
         reviewerEmail: '',
         reviewerPhone: '',
@@ -21,15 +21,16 @@ const Reviews = () => {
 
     useEffect(() => {
         fetchReviews();
-        fetchProperties();
-    }, []);
+        if (!propertyId) fetchProperties();
+    }, [propertyId]);
 
     const fetchReviews = async () => {
         try {
-            const res = await fetch(`${API}/api/reviews`);
+            const url = propertyId ? `${API}/api/reviews/${propertyId}` : `${API}/api/reviews`;
+            const res = await fetch(url);
             if (res.ok) {
                 const data = await res.json();
-                setReviews(data.slice(0, 6)); // Show top 6 recent approved reviews
+                setReviews(propertyId ? data : data.slice(0, 6)); // Show top 6 recent approved reviews on home, all on property details
             }
         } catch (err) {
             console.error(err);
@@ -61,7 +62,7 @@ const Reviews = () => {
             if (res.ok) {
                 alert("Review submitted successfully! It will appear once approved.");
                 setShowForm(false);
-                setFormData({ property: '', reviewerName: '', reviewerEmail: '', reviewerPhone: '', rating: 5, text: '' });
+                setFormData({ property: propertyId || '', reviewerName: '', reviewerEmail: '', reviewerPhone: '', rating: 5, text: '' });
             } else {
                 const d = await res.json();
                 alert(d.message || "Failed to submit review");
@@ -143,13 +144,15 @@ const Reviews = () => {
                                     </button>
                                 </div>
                                 <form onSubmit={handleSubmit} className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-[var(--listing-text-primary)] mb-1">Select Property *</label>
-                                        <select required value={formData.property} onChange={e => setFormData({...formData, property: e.target.value})} className="w-full p-3 rounded-xl bg-[var(--listing-card-bg)] border border-[var(--listing-border)] text-[var(--listing-text-primary)] focus:outline-none focus:border-[var(--listing-accent)]">
-                                            <option value="" disabled>Select a property</option>
-                                            {properties.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-                                        </select>
-                                    </div>
+                                    {!propertyId && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-[var(--listing-text-primary)] mb-1">Select Property *</label>
+                                            <select required value={formData.property} onChange={e => setFormData({...formData, property: e.target.value})} className="w-full p-3 rounded-xl bg-[var(--listing-card-bg)] border border-[var(--listing-border)] text-[var(--listing-text-primary)] focus:outline-none focus:border-[var(--listing-accent)]">
+                                                <option value="" disabled>Select a property</option>
+                                                {properties.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
                                     <div>
                                         <label className="block text-sm font-medium text-[var(--listing-text-primary)] mb-1">Your Name *</label>
                                         <input type="text" required maxLength={80} value={formData.reviewerName} onChange={e => setFormData({...formData, reviewerName: e.target.value})} className="w-full p-3 rounded-xl bg-[var(--listing-card-bg)] border border-[var(--listing-border)] text-[var(--listing-text-primary)] focus:outline-none focus:border-[var(--listing-accent)]" />

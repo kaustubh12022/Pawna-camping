@@ -95,7 +95,7 @@ const PropertyDetail = () => {
                         
                         <div className="grid grid-cols-2 gap-4 pt-2">
                             <div><p className="text-xs text-stone-400 uppercase tracking-wider">Max Guests</p><p className="text-sm font-medium text-stone-800 mt-0.5">{property.maxGuests}</p></div>
-                            <div><p className="text-xs text-stone-400 uppercase tracking-wider">Price</p><p className="text-sm font-medium text-emerald-600 mt-0.5">{property.pricing?.priceDisplay || '—'}/{property.pricing?.pricePer}</p></div>
+                            <div><p className="text-xs text-stone-400 uppercase tracking-wider">Price</p><p className="text-sm font-medium text-emerald-600 mt-0.5">{property.pricing?.priceDisplay || (property.pricing?.weekdayPrice ? `₹${property.pricing.weekdayPrice} - ₹${property.pricing.weekendPrice}` : '—')}/{property.pricing?.pricePer}</p></div>
                             <div><p className="text-xs text-stone-400 uppercase tracking-wider">Check-in</p><p className="text-sm font-medium text-stone-800 mt-0.5">{property.checkInTime}</p></div>
                             <div><p className="text-xs text-stone-400 uppercase tracking-wider">Check-out</p><p className="text-sm font-medium text-stone-800 mt-0.5">{property.checkOutTime}</p></div>
                         </div>

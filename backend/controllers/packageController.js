@@ -27,7 +27,7 @@ const getPackages = async (req, res) => {
 
         const packages = await Package.find(query)
             .populate('property', 'name type slug') // PHASE 2: Include property info
-            .sort({ priceValue: 1 });               // Ascending price
+            .sort({ weekdayPrice: 1 });               // Ascending price
 
         res.status(200).json(packages);
     } catch (error) {
@@ -50,7 +50,8 @@ const createPackage = async (req, res) => {
             description,
             features,
             price,
-            priceValue,
+            weekdayPrice,
+            weekendPrice,
             maxCapacity,
             image,
             propertyId   // PHASE 2: Optional property linkage
@@ -61,7 +62,8 @@ const createPackage = async (req, res) => {
             description,
             features,
             price,
-            priceValue: priceValue || 0,
+            weekdayPrice: weekdayPrice || 0,
+            weekendPrice: weekendPrice || 0,
             maxCapacity: maxCapacity || 10,
             image,
             property: propertyId || null  // PHASE 2: Link to property if provided

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorize } = require('../middleware/authMiddleware');
 const {
     getBlockedDates,
     createBlockedDate,
@@ -8,7 +8,7 @@ const {
 } = require('../controllers/blockedDateController');
 
 // All routes are protected (manager/owner only)
-router.use(protect);
+router.use(protect, authorize('manager', 'owner'));
 
 router.route('/')
     .get(getBlockedDates)

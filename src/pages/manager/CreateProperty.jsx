@@ -16,10 +16,12 @@ const CreateProperty = () => {
     const [formData, setFormData] = useState({
         name: '', type: 'campsite', location: '', googleMapsLink: '', address: '',
         shortDescription: '', description: '',
-        basePrice: '', discountPrice: '', pricePer: 'night',
+        weekdayPrice: '', weekendPrice: '', pricePer: 'night',
         maxGuests: 10, checkInTime: '2:00 PM', checkOutTime: '11:00 AM',
-        whatsappNumber: '', isActive: true
+        whatsappNumber: '', isActive: true, owner: ''
     });
+
+    const [owners, setOwners] = useState([]);
 
     const [amenityInput, setAmenityInput] = useState('');
     const [amenities, setAmenities] = useState([]);
@@ -51,14 +53,16 @@ const CreateProperty = () => {
                         address: data.address || '',
                         shortDescription: data.shortDescription || '',
                         description: data.description || '',
-                        basePrice: data.pricing?.basePrice || '',
-                        discountPrice: data.pricing?.discountPrice || '',
+                        basePrice: '', // Keeping it empty to remove later if needed, but not used now
+                        weekdayPrice: data.pricing?.weekdayPrice || '',
+                        weekendPrice: data.pricing?.weekendPrice || '',
                         pricePer: data.pricing?.pricePer || 'night',
                         maxGuests: data.maxGuests || 10,
                         checkInTime: data.checkInTime || '2:00 PM',
                         checkOutTime: data.checkOutTime || '11:00 AM',
                         whatsappNumber: data.whatsappNumber || '',
-                        isActive: data.isActive ?? true
+                        isActive: data.isActive ?? true,
+                        owner: data.owner?._id || data.owner || ''
                     });
                     
                     setAmenities(data.amenities || []);
@@ -85,8 +89,28 @@ const CreateProperty = () => {
                     setIsLoading(false);
                 }
             };
+
             fetchProperty();
+        } else {
+            setIsLoading(false);
         }
+
+        // Fetch owners for the dropdown
+        const fetchOwners = async () => {
+            try {
+                const token = localStorage.getItem('managerToken');
+                const res = await fetch(`${API}/api/owners`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setOwners(data);
+                }
+            } catch (err) {
+                console.error('Failed to fetch owners', err);
+            }
+        };
+        fetchOwners();
     }, [id, isEditMode]);
 
     const handleInputChange = (e) => {
@@ -151,21 +175,30 @@ const CreateProperty = () => {
             shortDescription: formData.shortDescription,
             description: formData.description,
             pricing: {
-                basePrice: Number(formData.basePrice),
-                discountPrice: formData.discountPrice ? Number(formData.discountPrice) : null,
+                weekdayPrice: Number(formData.weekdayPrice),
+                weekendPrice: Number(formData.weekendPrice),
                 pricePer: formData.pricePer,
-                priceDisplay: formData.basePrice ? `₹${Number(formData.basePrice).toLocaleString('en-IN')}` : ''
+                priceDisplay: formData.weekdayPrice && formData.weekendPrice 
+                    ? `₹${Number(formData.weekdayPrice).toLocaleString('en-IN')} - ₹${Number(formData.weekendPrice).toLocaleString('en-IN')}` 
+                    : formData.weekdayPrice ? `₹${Number(formData.weekdayPrice).toLocaleString('en-IN')}` : ''
             },
             maxGuests: Number(formData.maxGuests),
             checkInTime: formData.checkInTime,
             checkOutTime: formData.checkOutTime,
             whatsappNumber: formData.whatsappNumber,
             isActive: formData.isActive,
+            owner: formData.owner || null,
             amenities: finalAmenities,
             rules: finalRules,
             images,
             coverImage
         };
+
+        if (!formData.owner) {
+            setError('Please select an owner for this property.');
+            setIsSaving(false);
+            return;
+        }
 
         try {
             const token = localStorage.getItem('managerToken');
@@ -241,12 +274,23 @@ const CreateProperty = () => {
                                 <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Property Name <span className="text-red-500">*</span></label>
                                 <input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all" placeholder="e.g. Lakeside Bliss Tent" />
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Property Type <span className="text-red-500">*</span></label>
-                                <select name="type" value={formData.type} onChange={handleInputChange} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all">
-                                    <option value="campsite">Campsite</option>
-                                    <option value="villa">Villa</option>
-                                </select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Property Type <span className="text-red-500">*</span></label>
+                                    <select name="type" value={formData.type} onChange={handleInputChange} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all">
+                                        <option value="campsite">Campsite</option>
+                                        <option value="villa">Villa</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Assign Owner <span className="text-red-500">*</span></label>
+                                    <select name="owner" value={formData.owner} onChange={handleInputChange} required className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all">
+                                        <option value="">-- Select Owner --</option>
+                                        {owners.map(owner => (
+                                            <option key={owner._id} value={owner._id}>{owner.name} ({owner.email})</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -325,12 +369,12 @@ const CreateProperty = () => {
                         <h2 className="text-xl font-bold text-stone-800 border-b pb-2">Pricing & Rules</h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
-                                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Base Price (₹) <span className="text-red-500">*</span></label>
-                                <input type="number" name="basePrice" value={formData.basePrice} onChange={handleInputChange} required className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] outline-none transition-all" placeholder="e.g. 2000" />
+                                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Weekday Price (Mon-Fri) (₹) <span className="text-red-500">*</span></label>
+                                <input type="number" name="weekdayPrice" value={formData.weekdayPrice} onChange={handleInputChange} required className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] outline-none transition-all" placeholder="e.g. 2000" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Discount Price (₹)</label>
-                                <input type="number" name="discountPrice" value={formData.discountPrice} onChange={handleInputChange} className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] outline-none transition-all" placeholder="e.g. 1500 (optional)" />
+                                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Weekend Price (Sat-Sun) (₹) <span className="text-red-500">*</span></label>
+                                <input type="number" name="weekendPrice" value={formData.weekendPrice} onChange={handleInputChange} required className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-[#25D366] outline-none transition-all" placeholder="e.g. 3000" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-2">Price Per</label>

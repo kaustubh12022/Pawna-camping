@@ -18,6 +18,16 @@ dist-ssr
 .idea
 *.sln
 *.sw?
+
+# Environment files (all levels)
 .env
+.env.*
+!.env.example
+
+# Sensitive files
+**/token*.txt
 **/node_modules
 .DS_Store
+
+# Dev Scripts
+scripts/

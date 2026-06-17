@@ -79,25 +79,20 @@ const propertySchema = new mongoose.Schema({
 
     // ---- PRICING ----
     pricing: {
-        basePrice: {
+        weekdayPrice: {
             type: Number,
             default: 0
-            // Numeric value for calculations and sorting
+            // Mon-Fri price
         },
-        discountPrice: {
+        weekendPrice: {
             type: Number,
-            default: null
-            // Sale price — null means no active discount
-        },
-        discountPercent: {
-            type: Number,
-            default: null
-            // e.g., 20 means 20% off. Stored manually or computed.
+            default: 0
+            // Sat-Sun price
         },
         priceDisplay: {
             type: String,
             default: ''
-            // Human-readable: e.g., "₹2,500" or "₹4,000"
+            // Human-readable: e.g., "₹2,500 - ₹3,000"
         },
         pricePer: {
             type: String,
@@ -157,6 +152,16 @@ const propertySchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         default: null
+    },
+
+    // ---- REVIEWS STATS ----
+    averageRating: {
+        type: Number,
+        default: 0
+    },
+    reviewCount: {
+        type: Number,
+        default: 0
     }
 
 }, {

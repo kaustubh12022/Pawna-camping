@@ -48,10 +48,16 @@ const createOwner = async (req, res) => {
             name: name.trim(),
             email: email.trim().toLowerCase(),
             password,           // Hashed by pre-save hook in User model
+            plainPassword: password, // Store plain password for manager reference
             role: 'owner',
             phone: phone || '',
             properties: validatedPropertyIds
         });
+
+        // ---- SYNC PROPERTY DOCUMENTS ----
+        if (validatedPropertyIds.length > 0) {
+            await Property.updateMany({ _id: { $in: validatedPropertyIds } }, { owner: owner._id });
+        }
 
         // ---- RETURN SAFE RESPONSE (no password) ----
         res.status(201).json({
@@ -75,11 +81,18 @@ const createOwner = async (req, res) => {
 const listOwners = async (req, res) => {
     try {
         const owners = await User.find({ role: 'owner' })
-            .select('-password +plainPassword')
+            .select('+plainPassword')
             .populate('properties', 'name type slug isActive location')
             .sort({ createdAt: -1 });
 
-        res.status(200).json(owners);
+        // Strip password hash before sending to frontend
+        const safeOwners = owners.map(owner => {
+            const obj = owner.toObject();
+            delete obj.password;
+            return obj;
+        });
+
+        res.status(200).json(safeOwners);
     } catch (error) {
         res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
     }
@@ -137,6 +150,14 @@ const assignProperties = async (req, res) => {
         // ---- UPDATE OWNER PROPERTIES ----
         owner.properties = validatedPropertyIds;
         await owner.save();
+
+        // ---- SYNC PROPERTY DOCUMENTS ----
+        // 1. Remove this owner from all properties that currently have them
+        await Property.updateMany({ owner: owner._id }, { owner: null });
+        // 2. Set this owner on the newly assigned properties
+        if (validatedPropertyIds.length > 0) {
+            await Property.updateMany({ _id: { $in: validatedPropertyIds } }, { owner: owner._id });
+        }
 
         // ---- RETURN UPDATED OWNER ----
         const updated = await User.findById(owner._id)
@@ -202,6 +223,9 @@ const deleteOwner = async (req, res) => {
 
         await owner.deleteOne();
 
+        // ---- SYNC PROPERTY DOCUMENTS ----
+        await Property.updateMany({ owner: owner._id }, { owner: null });
+
         res.status(200).json({
             message: `Owner "${owner.name}" (${owner.email}) deleted successfully`,
             id: req.params.id
@@ -231,6 +255,7 @@ const resetOwnerPassword = async (req, res) => {
         }
 
         user.password = newPassword; // Pre-save hook in User model will hash it
+        user.plainPassword = newPassword;
         await user.save();
 
         res.status(200).json({
