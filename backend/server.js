@@ -21,6 +21,19 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(helmet()); // Add Helmet for security headers
+
+// Express 5 compatibility shim for express-mongo-sanitize:
+// In Express 5, req.query is a read-only getter. express-mongo-sanitize
+// tries to overwrite it, which throws "Cannot set property query".
+// This middleware clones req.query into a writable property first.
+app.use((req, res, next) => {
+    Object.defineProperty(req, 'query', {
+        value: { ...req.query },
+        writable: true,
+        configurable: true
+    });
+    next();
+});
 app.use(mongoSanitize()); // Prevent NoSQL Injection
 app.use(compression()); // Compress responses
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev')); // HTTP Logging
