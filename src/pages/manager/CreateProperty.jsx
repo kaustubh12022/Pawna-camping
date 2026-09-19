@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ImageUploader from '../../components/manager/ImageUploader';
+import { API_BASE_URL } from '../../config/api';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const CreateProperty = () => {
     const { id } = useParams();
@@ -355,7 +356,7 @@ const CreateProperty = () => {
                                 />
                                 <button 
                                     type="button"
-                                    onClick={(e) => handleAddTag({ key: 'Enter', preventDefault: () => {} }, 'amenity')}
+                                    onClick={() => handleAddTag({ key: 'Enter', preventDefault: () => {} }, 'amenity')}
                                     className="px-6 py-3 bg-stone-200 text-stone-700 font-bold rounded-xl hover:bg-stone-300 transition-colors shrink-0 active:scale-95"
                                 >
                                     Add
@@ -423,7 +424,7 @@ const CreateProperty = () => {
                                 />
                                 <button 
                                     type="button"
-                                    onClick={(e) => handleAddTag({ key: 'Enter', preventDefault: () => {} }, 'rule')}
+                                    onClick={() => handleAddTag({ key: 'Enter', preventDefault: () => {} }, 'rule')}
                                     className="px-6 py-3 bg-stone-200 text-stone-700 font-bold rounded-xl hover:bg-stone-300 transition-colors shrink-0 active:scale-95"
                                 >
                                     Add

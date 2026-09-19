@@ -227,6 +227,17 @@ const createProperty = async (req, res) => {
         if (!type || !['campsite', 'villa'].includes(type)) {
             return res.status(400).json({ message: 'Property type must be "campsite" or "villa"' });
         }
+        if (maxGuests !== undefined && (Number(maxGuests) <= 0 || isNaN(Number(maxGuests)))) {
+            return res.status(400).json({ message: 'Maximum guests must be greater than 0' });
+        }
+        if (pricing) {
+            if (pricing.weekdayPrice !== undefined && Number(pricing.weekdayPrice) < 0) {
+                return res.status(400).json({ message: 'Weekday price cannot be negative' });
+            }
+            if (pricing.weekendPrice !== undefined && Number(pricing.weekendPrice) < 0) {
+                return res.status(400).json({ message: 'Weekend price cannot be negative' });
+            }
+        }
 
         // ---- GENERATE UNIQUE SLUG ----
         const slug = await generateUniqueSlug(name);
@@ -283,6 +294,18 @@ const updateProperty = async (req, res) => {
 
         if (!property) {
             return res.status(404).json({ message: 'PROPERTY NOT FOUND' });
+        }
+
+        if (req.body.maxGuests !== undefined && (Number(req.body.maxGuests) <= 0 || isNaN(Number(req.body.maxGuests)))) {
+            return res.status(400).json({ message: 'Maximum guests must be greater than 0' });
+        }
+        if (req.body.pricing) {
+            if (req.body.pricing.weekdayPrice !== undefined && Number(req.body.pricing.weekdayPrice) < 0) {
+                return res.status(400).json({ message: 'Weekday price cannot be negative' });
+            }
+            if (req.body.pricing.weekendPrice !== undefined && Number(req.body.pricing.weekendPrice) < 0) {
+                return res.status(400).json({ message: 'Weekend price cannot be negative' });
+            }
         }
 
         // ---- HANDLE SLUG REGENERATION IF NAME CHANGES ----

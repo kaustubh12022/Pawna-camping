@@ -4,13 +4,15 @@ import {
     Plus, Search, Filter, Tent, Home, ToggleLeft, ToggleRight,
     Edit3, Trash2, MapPin, Users as UsersIcon, X, ChevronDown, Image as ImageIcon, AlertCircle, Eye
 } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
+import { useToast } from '../../context/ToastContext';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const PropertyManagement = () => {
+    const { toast } = useToast();
     const navigate = useNavigate();
     const [properties, setProperties] = useState([]);
-    const [owners, setOwners] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -23,13 +25,9 @@ const PropertyManagement = () => {
         if (!token()) return navigate('/manager/login');
         try {
             setIsLoading(true);
-            const [pRes, oRes] = await Promise.all([
-                fetch(`${API}/api/properties?isActive=all`, { headers: { Authorization: `Bearer ${token()}` } }),
-                fetch(`${API}/api/owners`, { headers: { Authorization: `Bearer ${token()}` } })
-            ]);
+            const pRes = await fetch(`${API}/api/properties?isActive=all`, { headers: { Authorization: `Bearer ${token()}` } });
             if (pRes.status === 401) { localStorage.removeItem('managerToken'); return navigate('/manager/login'); }
             setProperties(pRes.ok ? await pRes.json() : []);
-            setOwners(oRes.ok ? await oRes.json() : []);
         } catch (err) { setError(err.message); }
         finally { setIsLoading(false); }
     }, [navigate]);
@@ -46,7 +44,8 @@ const PropertyManagement = () => {
             const res = await fetch(`${API}/api/properties/${id}`, { method: 'DELETE', headers: headers() });
             if (!res.ok) throw new Error('Failed to delete');
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Property deleted successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
     const handleToggleStatus = async (id) => {
@@ -54,7 +53,8 @@ const PropertyManagement = () => {
             const res = await fetch(`${API}/api/properties/${id}/status`, { method: 'PATCH', headers: headers() });
             if (!res.ok) throw new Error('Failed to toggle status');
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Property status updated successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
 
@@ -90,10 +90,10 @@ const PropertyManagement = () => {
                     <input type="text" placeholder="Search properties..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide py-0.5">
                     {['all', 'campsite', 'villa'].map(t => (
                         <button key={t} onClick={() => setFilterType(t)}
-                            className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${filterType === t ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'}`}>
+                            className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors shrink-0 ${filterType === t ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'}`}>
                             {t === 'all' ? 'All' : t === 'campsite' ? '⛺ Campsites' : '🏡 Villas'}
                         </button>
                     ))}
@@ -143,17 +143,17 @@ const PropertyManagement = () => {
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex items-center gap-2 mt-3">
-                                        <button onClick={() => navigate(`/manager/properties/${prop._id}`)} className="p-1.5 rounded-lg hover:bg-emerald-50 text-stone-400 hover:text-emerald-600 transition-colors" title="View details">
+                                    <div className="flex items-center gap-1.5 sm:gap-2 mt-3">
+                                        <button onClick={() => navigate(`/manager/properties/${prop._id}`)} className="p-2 rounded-xl hover:bg-emerald-50 text-stone-500 hover:text-emerald-600 transition-colors" title="View details">
                                             <Eye className="w-4 h-4" />
                                         </button>
-                                        <button onClick={() => handleEdit(prop)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors" title="Edit">
+                                        <button onClick={() => handleEdit(prop)} className="p-2 rounded-xl hover:bg-stone-100 text-stone-500 hover:text-stone-700 transition-colors" title="Edit">
                                             <Edit3 className="w-4 h-4" />
                                         </button>
-                                        <button onClick={() => handleToggleStatus(prop._id)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors" title="Toggle status">
-                                            {prop.isActive ? <ToggleRight className="w-4 h-4 text-emerald-500" /> : <ToggleLeft className="w-4 h-4" />}
+                                        <button onClick={() => handleToggleStatus(prop._id)} className="p-2 rounded-xl hover:bg-stone-100 text-stone-500 hover:text-stone-700 transition-colors" title="Toggle status">
+                                            {prop.isActive ? <ToggleRight className="w-5 h-5 text-emerald-500" /> : <ToggleLeft className="w-5 h-5 text-stone-400" />}
                                         </button>
-                                        <button onClick={() => handleDelete(prop._id, prop.name)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 hover:text-red-600 transition-colors" title="Delete">
+                                        <button onClick={() => handleDelete(prop._id, prop.name)} className="p-2 rounded-xl hover:bg-red-50 text-stone-500 hover:text-red-600 transition-colors" title="Delete">
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>

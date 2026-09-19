@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePromotion } from '../context/PromotionContext';
+import { API_BASE_URL } from '../config/api';
 
 const PropertiesListing = () => {
     const { discountPercent, calculateMRP } = usePromotion();
@@ -25,7 +26,7 @@ const PropertiesListing = () => {
     useEffect(() => {
         const fetchProperties = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/properties?isActive=true`);
+                const response = await fetch(`${API_BASE_URL}/api/properties?isActive=true`);
                 if (!response.ok) throw new Error('Failed to fetch properties');
                 const data = await response.json();
                 setProperties(data);

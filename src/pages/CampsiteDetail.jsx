@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { usePromotion } from '../context/PromotionContext';
 import Reviews from '../components/Reviews';
+import { API_BASE_URL } from '../config/api';
 
 const isVideo = (url) => {
     if (!url) return false;
@@ -26,21 +27,20 @@ const CampsiteDetail = () => {
     const [property, setProperty] = useState(null);
     const [packages, setPackages] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeImage, setActiveImage] = useState(0);
     const [whatsappNumber, setWhatsappNumber] = useState('919975526627');
 
     useEffect(() => {
         const fetchPropertyAndPackages = async () => {
             try {
                 // Fetch property by slug
-                const propRes = await fetch(`${import.meta.env.VITE_API_URL}/api/properties/${slug}`);
+                const propRes = await fetch(`${API_BASE_URL}/api/properties/${slug}`);
                 if (!propRes.ok) throw new Error('Failed to fetch property');
                 const propData = await propRes.json();
                 setProperty(propData);
 
                 // If found, fetch its packages
                 if (propData && propData._id) {
-                    const pkgRes = await fetch(`${import.meta.env.VITE_API_URL}/api/packages?propertyId=${propData._id}`);
+                    const pkgRes = await fetch(`${API_BASE_URL}/api/packages?propertyId=${propData._id}`);
                     if (pkgRes.ok) {
                         const pkgData = await pkgRes.json();
                         setPackages(pkgData);
@@ -62,7 +62,7 @@ const CampsiteDetail = () => {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+                const response = await fetch(`${API_BASE_URL}/api/settings`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.whatsappNumber) setWhatsappNumber(data.whatsappNumber);
@@ -132,8 +132,7 @@ const CampsiteDetail = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.6 }}
-                        className="col-span-2 row-span-2 relative group cursor-pointer overflow-hidden"
-                        onClick={() => setActiveImage(0)}
+                        className="col-span-2 row-span-2 relative group overflow-hidden"
                     >
                         <MediaRenderer src={galleryImages[0]} alt={property.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     </motion.div>
@@ -143,8 +142,7 @@ const CampsiteDetail = () => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6, delay: 0.1 * (i + 1) }}
-                            className="relative group cursor-pointer overflow-hidden"
-                            onClick={() => setActiveImage(i + 1)}
+                            className="relative group overflow-hidden"
                         >
                             <MediaRenderer src={img} alt={`${property.name} ${i + 2}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                         </motion.div>
@@ -356,10 +354,10 @@ const CampsiteDetail = () => {
                                     onClick={() => handleBookPackage(pkg.title)}
                                     className="w-full py-3.5 bg-[var(--listing-accent)] text-white rounded-xl text-sm font-bold tracking-wide hover:opacity-90 transition-opacity active:scale-[0.98] mt-auto uppercase"
                                 >
-                                    Contact Owner
+                                    Book Package
                                 </button>
                                 <p className="text-[10px] text-[var(--listing-text-secondary)] text-center leading-tight mt-3">
-                                    This will redirect you to WhatsApp after form filling. No charges will be applied.
+                                    Reserve online with zero upfront payment • Instant WhatsApp confirmation
                                 </p>
                             </motion.div>
                         ))}

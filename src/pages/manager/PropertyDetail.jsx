@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, MapPin, Users, Clock, Image as ImageIcon, Package, Tent, Home, AlertCircle } from 'lucide-react';
 import PackageManagement from './PackageManagement';
+import { API_BASE_URL } from '../../config/api';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const isVideo = (url) => {
     if (!url) return false;

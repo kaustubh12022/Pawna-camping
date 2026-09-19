@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star, Check, Trash2, Clock, CheckCircle, MessageSquare } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const ReviewManagement = () => {
     const navigate = useNavigate();
@@ -11,40 +12,42 @@ const ReviewManagement = () => {
     const [approvedReviews, setApprovedReviews] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const token = () => localStorage.getItem('managerToken');
-    const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
+    const getHeaders = useCallback(() => {
+        const token = localStorage.getItem('managerToken');
+        return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    }, []);
 
     // Fetch pending reviews
-    const fetchPending = async () => {
+    const fetchPending = useCallback(async () => {
         try {
-            const res = await fetch(`${API}/api/reviews/pending`, { headers: headers() });
+            const res = await fetch(`${API}/api/reviews/pending`, { headers: getHeaders() });
             if (res.status === 401) return navigate('/manager/login');
             if (res.ok) setPendingReviews(await res.json());
         } catch (err) { console.error('Failed to fetch pending reviews', err); }
-    };
+    }, [navigate, getHeaders]);
 
     // Fetch approved reviews
-    const fetchApproved = async () => {
+    const fetchApproved = useCallback(async () => {
         try {
-            const res = await fetch(`${API}/api/reviews`, { headers: headers() });
+            const res = await fetch(`${API}/api/reviews`, { headers: getHeaders() });
             if (res.ok) setApprovedReviews(await res.json());
         } catch (err) { console.error('Failed to fetch approved reviews', err); }
-    };
+    }, [getHeaders]);
 
     useEffect(() => {
-        if (!token()) return navigate('/manager/login');
+        if (!localStorage.getItem('managerToken')) return navigate('/manager/login');
         const load = async () => {
             setIsLoading(true);
             await Promise.all([fetchPending(), fetchApproved()]);
             setIsLoading(false);
         };
         load();
-    }, []);
+    }, [fetchPending, fetchApproved, navigate]);
 
     const handleApprove = async (id) => {
         try {
             const res = await fetch(`${API}/api/reviews/${id}/approve`, {
-                method: 'PATCH', headers: headers()
+                method: 'PATCH', headers: getHeaders()
             });
             if (res.ok) {
                 const approved = await res.json();
@@ -58,7 +61,7 @@ const ReviewManagement = () => {
         if (!window.confirm('Are you sure you want to delete this review permanently?')) return;
         try {
             const res = await fetch(`${API}/api/reviews/${id}`, {
-                method: 'DELETE', headers: headers()
+                method: 'DELETE', headers: getHeaders()
             });
             if (res.ok) {
                 setPendingReviews(prev => prev.filter(r => r._id !== id));
@@ -164,20 +167,20 @@ const ReviewManagement = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex bg-stone-100 p-1 rounded-xl w-fit gap-1">
+            <div className="flex bg-stone-100 p-1 rounded-xl w-full sm:w-fit gap-1">
                 <button
                     onClick={() => setActiveTab('pending')}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'pending' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+                    className={`flex items-center justify-center gap-2 flex-1 sm:flex-initial px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'pending' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
                 >
                     <Clock className="w-4 h-4" />
-                    Pending ({pendingReviews.length})
+                    <span>Pending ({pendingReviews.length})</span>
                 </button>
                 <button
                     onClick={() => setActiveTab('approved')}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'approved' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+                    className={`flex items-center justify-center gap-2 flex-1 sm:flex-initial px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'approved' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
                 >
                     <CheckCircle className="w-4 h-4" />
-                    Approved ({approvedReviews.length})
+                    <span>Approved ({approvedReviews.length})</span>
                 </button>
             </div>
 

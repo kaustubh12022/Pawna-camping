@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle, Copy, Check, Home, RefreshCw } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { API_BASE_URL } from '../config/api';
 
 const Booking = () => {
+    const navigate = useNavigate();
+    const { toast } = useToast();
     const [searchParams] = useSearchParams();
     const [properties, setProperties] = useState([]);
     const [availablePackages, setAvailablePackages] = useState([]);
     const [step, setStep] = useState(1);
+    const [bookingComplete, setBookingComplete] = useState(false);
+    const [confirmedBookingData, setConfirmedBookingData] = useState(null);
+    const [copiedRef, setCopiedRef] = useState(false);
     
     const [formData, setFormData] = useState({
         propertyId: '',
@@ -81,7 +89,7 @@ const Booking = () => {
     useEffect(() => {
         const fetchProperties = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/properties?isActive=true`);
+                const response = await fetch(`${API_BASE_URL}/api/properties?isActive=true`);
                 if (response.ok) {
                     const data = await response.json();
                     setProperties(data);
@@ -111,14 +119,17 @@ const Booking = () => {
             }
 
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/packages?propertyId=${formData.propertyId}`);
+                const response = await fetch(`${API_BASE_URL}/api/packages?propertyId=${formData.propertyId}`);
                 if (response.ok) {
                     const data = await response.json();
                     setAvailablePackages(data);
                     // Reset package type if current one isn't in the new list
-                    if (!data.find(p => p.title === formData.packageType)) {
-                        setFormData(prev => ({ ...prev, packageType: '' }));
-                    }
+                    setFormData(prev => {
+                        if (prev.packageType && !data.some(p => p.title === prev.packageType)) {
+                            return { ...prev, packageType: '' };
+                        }
+                        return prev;
+                    });
                 }
             } catch (err) {
                 console.error("Failed to load packages for booking form", err);
@@ -134,7 +145,7 @@ const Booking = () => {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+                const response = await fetch(`${API_BASE_URL}/api/settings`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.whatsappNumber) setWhatsappNumber(data.whatsappNumber);
@@ -177,16 +188,19 @@ const Booking = () => {
         e.preventDefault();
 
         if (step === 1) {
-            if (!formData.propertyId || !formData.checkIn || !formData.checkOut) return;
+            if (!formData.propertyId || !formData.checkIn || !formData.checkOut) {
+                toast.warning("Please fill in all booking details.");
+                return;
+            }
             
             const selectedProp = properties.find(p => p._id === formData.propertyId);
             if (selectedProp && selectedProp.type === 'campsite' && !formData.packageType) {
-                alert("Please select a package.");
+                toast.warning("Please select a package.");
                 return;
             }
             
             if (new Date(formData.checkOut) <= new Date(formData.checkIn)) {
-                alert("Check-out date must be after check-in date");
+                toast.warning("Check-out date must be after check-in date.");
                 return;
             }
         }
@@ -197,11 +211,31 @@ const Booking = () => {
             const totalFood = Number(formData.vegCount) + Number(formData.nonVegCount);
 
             if (totalGuests < 1) {
-                alert("Minimum 1 guest is required");
+                toast.warning("Minimum 1 guest is required.");
                 return;
             }
             if (selectedProp && selectedProp.type === 'campsite' && totalFood !== totalGuests) {
-                alert(`Food count must exactly match the number of guests (${totalGuests}). You selected ${totalFood}.`);
+                toast.warning(`Meal count must exactly match the number of guests (${totalGuests}). You selected ${totalFood} (${formData.vegCount} Veg, ${formData.nonVegCount} Non-Veg).`);
+                return;
+            }
+
+            if (!formData.firstName || formData.firstName.trim().length < 2) {
+                toast.warning("Please enter your first name (at least 2 characters).");
+                return;
+            }
+            if (!formData.lastName || !formData.lastName.trim()) {
+                toast.warning("Please enter your last name.");
+                return;
+            }
+            if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+                toast.warning("Please enter a valid email address.");
+                return;
+            }
+
+            const cleanPhone = (formData.phone || '').replace(/[\s+-]/g, '');
+            const normalizedPhone = cleanPhone.length > 10 && cleanPhone.startsWith('91') ? cleanPhone.slice(2) : cleanPhone;
+            if (!/^[6-9]\d{9}$/.test(normalizedPhone)) {
+                toast.warning("Please enter a valid 10-digit Indian phone number starting with 6-9.");
                 return;
             }
         }
@@ -216,12 +250,44 @@ const Booking = () => {
         }
     };
 
+    const handleCopyRef = () => {
+        if (!confirmedBookingData?.refCode) return;
+        navigator.clipboard.writeText(confirmedBookingData.refCode);
+        setCopiedRef(true);
+        toast.success("Booking reference copied!");
+        setTimeout(() => setCopiedRef(false), 2000);
+    };
+
+    const handleResetBooking = () => {
+        setFormData({
+            propertyId: '',
+            checkIn: new Date().toISOString().split('T')[0],
+            checkOut: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
+            packageType: '',
+            guests: 1,
+            vegCount: 1,
+            nonVegCount: 0,
+            firstName: '',
+            lastName: '',
+            email: '',
+            phone: '',
+            botField: ''
+        });
+        setStep(1);
+        setBookingComplete(false);
+        setConfirmedBookingData(null);
+        setApiError(null);
+    };
+
     const handleConfirmBooking = async () => {
         setIsLoading(true);
         setApiError(null);
 
         const dominantFoodPreference = Number(formData.nonVegCount) > 0 ? 'Non-Veg' : 'Veg';
         const selectedProp = properties.find(p => p._id === formData.propertyId);
+
+        const cleanPhone = (formData.phone || '').replace(/[\s+-]/g, '');
+        const normalizedPhone = cleanPhone.length > 10 && cleanPhone.startsWith('91') ? cleanPhone.slice(2) : cleanPhone;
 
         const bookingPayload = {
             propertyId: formData.propertyId,
@@ -232,14 +298,15 @@ const Booking = () => {
             vegGuests: selectedProp?.type === 'villa' ? 0 : Number(formData.vegCount),
             nonVegGuests: selectedProp?.type === 'villa' ? 0 : Number(formData.nonVegCount),
             foodPreference: selectedProp?.type === 'villa' ? 'N/A' : dominantFoodPreference,
-            customerName: `${formData.firstName} ${formData.lastName}`,
-            customerPhone: formData.phone,
+            customerName: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
+            customerPhone: normalizedPhone,
+            customerEmail: formData.email ? formData.email.trim() : undefined,
             totalPrice: calculatedPrice,
             botField: formData.botField
         };
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, {
+            const response = await fetch(`${API_BASE_URL}/api/bookings`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -252,6 +319,8 @@ const Booking = () => {
                 throw new Error(errorData.message || 'Failed to save booking. Please try again.');
             }
 
+            const savedBooking = await response.json();
+
             const propertyName = selectedProp ? selectedProp.name : 'Pawna';
             let message = `🏕️ *New Booking Request!* 🌟\n\n🏡 *Property:* ${propertyName}\n📦 *Package/Type:* ${formData.packageType}\n📅 *Dates:* ${formData.checkIn} to ${formData.checkOut}\n🌙 *Nights:* ${nights}\n\n👥 *Total Guests:* ${formData.guests}`;
             
@@ -259,7 +328,7 @@ const Booking = () => {
                 message += `\n🥗 *Veg:* ${formData.vegCount} | 🍗 *Non-Veg:* ${formData.nonVegCount}`;
             }
             
-            message += `\n\n💰 *Total Price:* ₹${calculatedPrice.toLocaleString('en-IN')}\n\n👤 *Name:* ${formData.firstName} ${formData.lastName}\n📞 *Phone:* ${formData.phone}\n📧 *Email:* ${formData.email}\n\n✨ *Looking forward to an amazing stay!* ✨`;
+            message += `\n\n💰 *Total Price:* ₹${calculatedPrice.toLocaleString('en-IN')}\n\n👤 *Name:* ${formData.firstName.trim()} ${formData.lastName.trim()}\n📞 *Phone:* ${normalizedPhone}\n📧 *Email:* ${formData.email}\n\n✨ *Looking forward to an amazing stay!* ✨`;
 
             const encodedMessage = encodeURIComponent(message);
             // Use property specific WhatsApp if available, fallback to global
@@ -267,8 +336,23 @@ const Booking = () => {
             const whatsappUrl = `https://wa.me/${targetWhatsapp}?text=${encodedMessage}`;
             window.open(whatsappUrl, '_blank');
 
+            const refCode = `#PC-${(savedBooking._id || '').slice(-6).toUpperCase()}`;
+
+            setConfirmedBookingData({
+                ...savedBooking,
+                refCode,
+                propertyName,
+                targetWhatsapp,
+                whatsappUrl,
+                nights,
+                totalPrice: calculatedPrice
+            });
+            setBookingComplete(true);
+            toast.success("Booking request submitted successfully!");
+
         } catch (error) {
             setApiError(error.message);
+            toast.error(error.message || 'Failed to save booking. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -287,8 +371,12 @@ const Booking = () => {
                     viewport={{ once: true }}
                     className="text-center mb-8 sm:mb-16"
                 >
-                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--listing-text-primary)] mb-3 sm:mb-4 tracking-tight">Reserve Your Stay</h2>
-                    <p className="text-[var(--listing-text-secondary)] font-light text-base sm:text-lg">Secure your spot in nature.</p>
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-semibold text-[var(--listing-text-primary)] mb-3 sm:mb-4 tracking-tight">
+                        {bookingComplete ? "Reservation Status" : "Reserve Your Stay"}
+                    </h2>
+                    <p className="text-[var(--listing-text-secondary)] font-light text-base sm:text-lg">
+                        {bookingComplete ? "Your stay request has been captured." : "Secure your spot in nature."}
+                    </p>
                 </motion.div>
 
                 <motion.div
@@ -297,8 +385,129 @@ const Booking = () => {
                     viewport={{ once: true }}
                     className="bg-[var(--listing-card-bg)] rounded-2xl sm:rounded-3xl p-5 sm:p-8 md:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-[var(--listing-border)]"
                 >
+                    {bookingComplete && confirmedBookingData ? (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.4 }}
+                            className="text-center"
+                        >
+                            {/* Celebration Badge */}
+                            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-md ring-8 ring-emerald-50">
+                                <CheckCircle className="w-10 h-10 sm:w-12 sm:h-12" />
+                            </div>
+                            <h3 className="text-2xl sm:text-3xl font-bold text-[var(--listing-text-primary)] mb-2 tracking-tight">
+                                Booking Request Received!
+                            </h3>
+                            <p className="text-sm sm:text-base text-[var(--listing-text-secondary)] max-w-md mx-auto mb-6 font-light">
+                                Thank you, <span className="font-semibold text-[var(--listing-text-primary)]">{formData.firstName}</span>! Your reservation has been recorded in our system.
+                            </p>
 
-                    <div className="flex justify-between items-center mb-8 sm:mb-12 relative">
+                            {/* Booking Reference ID with Copy Button */}
+                            <div className="inline-flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 bg-[var(--listing-bg)] border border-[var(--listing-border)] rounded-2xl mb-8 shadow-sm">
+                                <span className="text-xs text-[var(--listing-text-secondary)] uppercase tracking-wider font-semibold">Reference:</span>
+                                <span className="font-mono text-base sm:text-lg font-bold text-[var(--listing-accent)]">{confirmedBookingData.refCode}</span>
+                                <button
+                                    onClick={handleCopyRef}
+                                    type="button"
+                                    className="p-1.5 hover:bg-[var(--listing-card-bg)] rounded-lg transition-colors text-[var(--listing-text-secondary)] hover:text-[var(--listing-text-primary)] cursor-pointer"
+                                    title="Copy Reference ID"
+                                >
+                                    {copiedRef ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                                </button>
+                            </div>
+
+                            {/* Stay Summary Card */}
+                            <div className="bg-[var(--listing-bg)] rounded-2xl p-5 sm:p-6 border border-[var(--listing-border)] text-left space-y-3.5 mb-6 shadow-sm">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-[var(--listing-text-secondary)] mb-1">
+                                    Stay Summary
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-[var(--listing-text-secondary)]">Property</span>
+                                    <span className="font-semibold text-[var(--listing-text-primary)]">{confirmedBookingData.propertyName}</span>
+                                </div>
+                                {formData.packageType && (
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-[var(--listing-text-secondary)]">Package / Stay</span>
+                                        <span className="font-medium text-[var(--listing-text-primary)]">{formData.packageType}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-[var(--listing-text-secondary)]">Dates</span>
+                                    <span className="font-medium text-[var(--listing-text-primary)]">
+                                        {formData.checkIn} to {formData.checkOut} ({confirmedBookingData.nights} {confirmedBookingData.nights === 1 ? 'Night' : 'Nights'})
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-[var(--listing-text-secondary)]">Guests</span>
+                                    <span className="font-medium text-[var(--listing-text-primary)]">
+                                        {formData.guests} {formData.guests === 1 ? 'Guest' : 'Guests'}
+                                        {isCampsite && ` (${formData.vegCount} Veg, ${formData.nonVegCount} Non-Veg)`}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm pt-3 border-t border-[var(--listing-border)]">
+                                    <span className="font-semibold text-[var(--listing-text-primary)]">Estimated Total</span>
+                                    <span className="text-base font-bold text-emerald-600">₹{confirmedBookingData.totalPrice?.toLocaleString('en-IN')}</span>
+                                </div>
+                            </div>
+
+                            {/* Reassurance Timeline */}
+                            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 sm:p-5 mb-8 text-left">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-emerald-900 mb-3 flex items-center gap-1.5">
+                                    <span>What happens next?</span>
+                                </div>
+                                <div className="space-y-2.5 text-xs sm:text-sm text-stone-700">
+                                    <div className="flex items-start gap-2.5">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</div>
+                                        <div><span className="font-semibold text-stone-900">Request Recorded:</span> Your booking is registered with ID <span className="font-mono font-medium">{confirmedBookingData.refCode}</span>.</div>
+                                    </div>
+                                    <div className="flex items-start gap-2.5">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</div>
+                                        <div><span className="font-semibold text-stone-900">Direct Host Connection:</span> WhatsApp was launched to connect you with the property manager.</div>
+                                    </div>
+                                    <div className="flex items-start gap-2.5">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</div>
+                                        <div><span className="font-semibold text-stone-900">Zero Upfront Charges:</span> No card or online payment required right now. Pay upon arrival or confirmation with host.</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex flex-col gap-3">
+                                <a
+                                    href={confirmedBookingData.whatsappUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full py-3.5 sm:py-4 bg-[#25D366] text-white rounded-xl text-sm font-semibold tracking-wide hover:bg-[#1DA851] transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-500/20 active:scale-[0.98]"
+                                >
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.474-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.347-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.876 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
+                                    </svg>
+                                    Open WhatsApp Chat Again
+                                </a>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/#properties')}
+                                        className="py-3 px-4 rounded-xl border border-[var(--listing-border)] text-sm font-medium text-[var(--listing-text-primary)] hover:bg-[var(--listing-bg)] transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <Home className="w-4 h-4" />
+                                        Browse More Stays
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleResetBooking}
+                                        className="py-3 px-4 rounded-xl bg-[var(--listing-accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <RefreshCw className="w-4 h-4" />
+                                        Make Another Booking
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    ) : (
+                        <>
+                            <div className="flex justify-between items-center mb-8 sm:mb-12 relative">
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-px bg-[var(--listing-border)] z-0"></div>
                         {[1, 2, 3].map((num) => (
                             <div key={num} className="relative z-10 flex flex-col items-center gap-1.5 sm:gap-2">
@@ -542,6 +751,8 @@ const Booking = () => {
 
                         </AnimatePresence>
                     </div>
+                        </>
+                    )}
                 </motion.div>
 
             </div>

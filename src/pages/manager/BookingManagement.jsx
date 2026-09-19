@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, CalendarCheck, AlertCircle, Check, X as XIcon, Trash2, Plus, Download, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
+import { useToast } from '../../context/ToastContext';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 const today = new Date().toISOString().split('T')[0];
+const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
 const BookingManagement = () => {
+    const { toast } = useToast();
     const navigate = useNavigate();
     const [bookings, setBookings] = useState([]);
     const [properties, setProperties] = useState([]);
@@ -18,12 +22,13 @@ const BookingManagement = () => {
     const [sortBy, setSortBy] = useState('newest');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [exportPeriod, setExportPeriod] = useState('');
+    const [isExporting, setIsExporting] = useState(false);
     const [confirmBookingData, setConfirmBookingData] = useState(null);
     const [revenueData, setRevenueData] = useState({ amount: '', commission: '' });
 
     const [newBooking, setNewBooking] = useState({
         customerName: '', customerPhone: '', propertyId: '',
-        packageType: '', checkIn: today, checkOut: today,
+        packageType: '', checkIn: today, checkOut: tomorrow,
         guests: 1, vegGuests: 0, nonVegGuests: 0
     });
 
@@ -54,7 +59,8 @@ const BookingManagement = () => {
             });
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success(`Booking status updated to ${newStatus}`);
+        } catch (err) { toast.error(err.message); }
     };
 
     const initiateConfirm = (id) => {
@@ -77,7 +83,8 @@ const BookingManagement = () => {
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
             setConfirmBookingData(null);
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Booking confirmed successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
     const handleDelete = async (id) => {
@@ -86,7 +93,8 @@ const BookingManagement = () => {
             const res = await fetch(`${API}/api/bookings/${id}`, { method: 'DELETE', headers: headers() });
             if (!res.ok) throw new Error('Failed to delete');
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Booking deleted successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
     const handleCreateBooking = async (e) => {
@@ -105,19 +113,62 @@ const BookingManagement = () => {
             });
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
             setShowCreateModal(false);
-            setNewBooking({ customerName: '', customerPhone: '', propertyId: '', packageType: '', checkIn: today, checkOut: today, guests: 1, vegGuests: 0, nonVegGuests: 0 });
+            setNewBooking({ customerName: '', customerPhone: '', propertyId: '', packageType: '', checkIn: today, checkOut: tomorrow, guests: 1, vegGuests: 0, nonVegGuests: 0 });
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Booking created successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
-    const handleExport = () => {
-        const params = new URLSearchParams();
-        if (exportPeriod) params.set('period', exportPeriod);
-        if (propertyFilter !== 'all') params.set('propertyId', propertyFilter);
-        const url = `${API}/api/bookings/export?${params}`;
-        const a = document.createElement('a');
-        a.href = url;
-        a.click();
+    const handleExport = async () => {
+        if (!token()) return navigate('/manager/login');
+        setIsExporting(true);
+        try {
+            const params = new URLSearchParams();
+            if (exportPeriod) params.set('period', exportPeriod);
+            if (propertyFilter !== 'all') params.set('propertyId', propertyFilter);
+            const url = `${API}/api/bookings/export?${params}`;
+
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${token()}`
+                }
+            });
+
+            if (res.status === 401) {
+                localStorage.removeItem('managerToken');
+                return navigate('/manager/login');
+            }
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData?.message || `Export failed with status ${res.status}`);
+            }
+
+            const blob = await res.blob();
+            // Determine filename from Content-Disposition header if available
+            const contentDisposition = res.headers.get('Content-Disposition');
+            let filename = `bookings_${exportPeriod || 'all'}_${today}.csv`;
+            if (contentDisposition) {
+                const match = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (match && match[1]) filename = match[1];
+            }
+
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(downloadUrl);
+            toast.success('Bookings CSV exported successfully');
+        } catch (err) {
+            console.error('Export error:', err);
+            toast.error(err.message || 'Failed to export bookings CSV');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     const sorted = [...bookings].sort((a, b) => {
@@ -161,9 +212,9 @@ const BookingManagement = () => {
                     <h1 className="text-2xl font-bold text-stone-900">Bookings</h1>
                     <p className="text-stone-500 text-sm mt-1">{bookings.length} total bookings</p>
                 </div>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
                     {/* Export */}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                         <select value={exportPeriod} onChange={e => setExportPeriod(e.target.value)}
                             className="px-3 py-2 rounded-xl border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
                             <option value="">All Time</option>
@@ -171,13 +222,21 @@ const BookingManagement = () => {
                             <option value="weekly">This Week</option>
                             <option value="monthly">This Month</option>
                         </select>
-                        <button onClick={handleExport}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-stone-100 text-stone-700 rounded-xl text-sm font-semibold hover:bg-stone-200 transition-colors">
-                            <Download className="w-4 h-4" /> CSV
+                        <button 
+                            onClick={handleExport}
+                            disabled={isExporting}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-stone-100 text-stone-700 rounded-xl text-sm font-semibold hover:bg-stone-200 transition-colors disabled:opacity-50"
+                        >
+                            {isExporting ? (
+                                <div className="w-4 h-4 border-2 border-stone-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <Download className="w-4 h-4" />
+                            )}
+                            CSV
                         </button>
                     </div>
                     <button onClick={() => setShowCreateModal(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm">
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm">
                         <Plus className="w-4 h-4" /> New Booking
                     </button>
                 </div>
@@ -240,7 +299,7 @@ const BookingManagement = () => {
                     <>
                         {/* Desktop Table */}
                         <div className="hidden md:block overflow-x-auto">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
+                            <table className="w-full min-w-[760px] text-left text-sm whitespace-nowrap">
                                 <thead className="bg-stone-50/80 border-b border-stone-100 text-stone-500 text-xs font-medium uppercase tracking-wider">
                                     <tr>
                                         <th className="px-5 py-3">Customer</th>
@@ -326,6 +385,14 @@ const BookingManagement = () => {
                                         </div>
                                         <div className="font-bold text-emerald-700">{b.guests} Guests</div>
                                     </div>
+
+                                    {b.propertyType !== 'villa' && (b.vegGuests > 0 || b.nonVegGuests > 0 || b.foodPreference) && (
+                                        <div className="flex flex-wrap gap-1.5 px-3 py-2 bg-stone-50/50 rounded-xl border border-stone-100">
+                                            {b.vegGuests > 0 && <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-green-50 text-green-700">{b.vegGuests} Veg</span>}
+                                            {b.nonVegGuests > 0 && <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-orange-50 text-orange-700">{b.nonVegGuests} Non-Veg</span>}
+                                            {b.vegGuests === 0 && b.nonVegGuests === 0 && b.foodPreference && <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-stone-100 text-stone-600">{b.foodPreference}</span>}
+                                        </div>
+                                    )}
                                     
                                     <div className="flex justify-end gap-2 pt-2">
                                         {b.status === 'pending' && (
@@ -367,18 +434,18 @@ const BookingManagement = () => {
                         </div>
                         <div className="p-6 overflow-y-auto">
                             <form onSubmit={handleCreateBooking} className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-stone-900 uppercase tracking-wider mb-1.5">Customer Name *</label>
                                         <input required value={newBooking.customerName} onChange={e => setNewBooking(p => ({...p, customerName: e.target.value}))}
                                             className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
                                     </div>
-                                    <div className="col-span-2">
+                                    <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-stone-900 uppercase tracking-wider mb-1.5">Phone *</label>
                                         <input required value={newBooking.customerPhone} onChange={e => setNewBooking(p => ({...p, customerPhone: e.target.value}))}
                                             className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
                                     </div>
-                                    <div className="col-span-2">
+                                    <div className="sm:col-span-2">
                                         <label className="block text-xs font-bold text-stone-900 uppercase tracking-wider mb-1.5">Property *</label>
                                         <select required value={newBooking.propertyId} onChange={e => setNewBooking(p => ({...p, propertyId: e.target.value}))}
                                             className="w-full px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
@@ -387,7 +454,7 @@ const BookingManagement = () => {
                                         </select>
                                     </div>
                                     {!isVillaNew && (
-                                        <div className="col-span-2">
+                                        <div className="sm:col-span-2">
                                             <label className="block text-xs font-bold text-stone-900 uppercase tracking-wider mb-1.5">Package</label>
                                             <input value={newBooking.packageType} onChange={e => setNewBooking(p => ({...p, packageType: e.target.value}))}
                                                 placeholder="e.g. Campfire Package"

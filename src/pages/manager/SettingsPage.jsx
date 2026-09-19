@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Save, MessageSquare, Key } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
+import { useToast } from '../../context/ToastContext';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const SettingsPage = () => {
+    const { toast } = useToast();
     const navigate = useNavigate();
     const [whatsappNumber, setWhatsappNumber] = useState('');
     const [whatsappLoading, setWhatsappLoading] = useState(false);
@@ -34,28 +37,62 @@ const SettingsPage = () => {
         setWhatsappLoading(true);
         try {
             const res = await fetch(`${API}/api/settings`, {
-                method: 'PUT', headers: headers(), body: JSON.stringify({ whatsappNumber })
+                method: 'PUT',
+                headers: headers(),
+                body: JSON.stringify({ whatsappNumber })
             });
-            if (res.ok) { setSuccess('WhatsApp number updated!'); setTimeout(() => setSuccess(''), 3000); }
-            else { const d = await res.json(); throw new Error(d.message); }
-        } catch (err) { alert(err.message); }
-        finally { setWhatsappLoading(false); }
+
+            if (res.status === 401) {
+                localStorage.removeItem('managerToken');
+                return navigate('/manager/login');
+            }
+
+            if (res.ok) {
+                setSuccess('WhatsApp number updated!');
+                toast.success('WhatsApp number updated successfully!');
+                setTimeout(() => setSuccess(''), 3000);
+            } else {
+                const d = await res.json().catch(() => ({}));
+                throw new Error(d.message || 'Failed to update settings');
+            }
+        } catch (err) {
+            toast.error(err.message);
+        } finally {
+            setWhatsappLoading(false);
+        }
     };
 
     const handlePasswordUpdate = async (e) => {
         e.preventDefault();
         if (!token()) return navigate('/manager/login');
-        if (managerPassword.length < 6) return alert('Password must be at least 6 characters');
+        if (managerPassword.length < 6) return toast.warning('Password must be at least 6 characters');
         setPasswordLoading(true);
         try {
             const res = await fetch(`${API}/api/auth/update-password`, {
-                method: 'PUT', headers: headers(),
-                body: JSON.stringify({ targetRole: 'manager', newPassword: managerPassword })
+                method: 'PUT',
+                headers: headers(),
+                body: JSON.stringify({ newPassword: managerPassword })
             });
-            if (res.ok) { setManagerPassword(''); setSuccess('Password updated!'); setTimeout(() => setSuccess(''), 3000); }
-            else { const d = await res.json(); throw new Error(d.message); }
-        } catch (err) { alert(err.message); }
-        finally { setPasswordLoading(false); }
+
+            if (res.status === 401) {
+                localStorage.removeItem('managerToken');
+                return navigate('/manager/login');
+            }
+
+            if (res.ok) {
+                setManagerPassword('');
+                setSuccess('Password updated successfully!');
+                toast.success('Password updated successfully!');
+                setTimeout(() => setSuccess(''), 3000);
+            } else {
+                const d = await res.json().catch(() => ({}));
+                throw new Error(d.message || 'Failed to update password');
+            }
+        } catch (err) {
+            toast.error(err.message);
+        } finally {
+            setPasswordLoading(false);
+        }
     };
 
     return (

@@ -19,11 +19,14 @@ import {
 import PackageManagement from './manager/PackageManagement';
 import BlockedDatesManagement from './owner/BlockedDatesManagement';
 import ManualInstallButton from '../components/ManualInstallButton';
+import { API_BASE_URL } from '../config/api';
+import { useToast } from '../context/ToastContext';
 
 const COLORS = ['#10b981', '#0ea5e9', '#f59e0b', '#8b5cf6'];
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const OwnerDashboard = () => {
+    const { toast } = useToast();
     const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, analytics, packages, revenue, blocked-dates
     const [ownerProfile, setOwnerProfile] = useState(null);
     const [selectedProperty, setSelectedProperty] = useState('all');
@@ -179,7 +182,7 @@ const OwnerDashboard = () => {
             setConfirmedBookings(filtered);
             setShowConfirmedDetails(true);
         } catch (err) {
-            alert(err.message);
+            toast.error(err.message);
         } finally {
             setConfirmedLoading(false);
         }
@@ -218,13 +221,14 @@ const OwnerDashboard = () => {
             if (res.ok) {
                 const updatedBooking = await res.json();
                 setConfirmedBookings(prev => prev.map(b => b._id === bookingId ? updatedBooking : b).filter(b => b.status !== 'cancelled'));
+                toast.success(`Booking ${status === 'accepted' ? 'accepted' : 'rejected'} successfully`);
             } else {
                 const data = await res.json();
-                alert(data.message || "Failed to update booking response");
+                toast.error(data.message || "Failed to update booking response");
             }
         } catch (err) {
             console.error(err);
-            alert("Error updating booking response");
+            toast.error("Error updating booking response");
         }
     };
 
@@ -396,14 +400,14 @@ const OwnerDashboard = () => {
                 <div className="max-w-7xl mx-auto space-y-8 px-4 lg:px-8">
                     {/* TABS & FILTERS */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex flex-wrap bg-stone-100 p-1 rounded-xl w-full sm:w-auto gap-1">
-                            <button onClick={() => setActiveTab('dashboard')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'dashboard' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Dashboard</button>
-                            <button onClick={() => setActiveTab('analytics')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'analytics' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Analytics</button>
+                        <div className="flex overflow-x-auto scrollbar-hide flex-nowrap sm:flex-wrap bg-stone-100 p-1 rounded-xl w-full sm:w-auto gap-1">
+                            <button onClick={() => setActiveTab('dashboard')} className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'dashboard' ? 'bg-white text-stone-900 shadow-sm font-bold' : 'text-stone-500 hover:text-stone-700'}`}>Dashboard</button>
+                            <button onClick={() => setActiveTab('analytics')} className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'analytics' ? 'bg-white text-stone-900 shadow-sm font-bold' : 'text-stone-500 hover:text-stone-700'}`}>Analytics</button>
                             {!hasOnlyVillas && (
-                                <button onClick={() => setActiveTab('packages')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'packages' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Packages</button>
+                                <button onClick={() => setActiveTab('packages')} className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'packages' ? 'bg-white text-stone-900 shadow-sm font-bold' : 'text-stone-500 hover:text-stone-700'}`}>Packages</button>
                             )}
-                            <button onClick={() => setActiveTab('revenue')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'revenue' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Revenue</button>
-                            <button onClick={() => setActiveTab('blocked-dates')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'blocked-dates' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}>Blocked Dates</button>
+                            <button onClick={() => setActiveTab('revenue')} className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'revenue' ? 'bg-white text-stone-900 shadow-sm font-bold' : 'text-stone-500 hover:text-stone-700'}`}>Revenue</button>
+                            <button onClick={() => setActiveTab('blocked-dates')} className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'blocked-dates' ? 'bg-white text-stone-900 shadow-sm font-bold' : 'text-stone-500 hover:text-stone-700'}`}>Blocked Dates</button>
                         </div>
 
                         <div className="flex items-center bg-white border border-stone-200 rounded-xl px-3 py-1.5 shadow-sm focus-within:ring-2 focus-within:ring-[#2B3440] transition-all">
@@ -427,7 +431,7 @@ const OwnerDashboard = () => {
                     </div>
 
                     {!hasOnlyVillas && activeTab === 'packages' && (
-                        <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-6 lg:p-8">
+                        <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-4 sm:p-6 lg:p-8">
                             <PackageManagement 
                                 propertyId={selectedProperty !== 'all' ? selectedProperty : null} 
                             />
@@ -457,7 +461,7 @@ const OwnerDashboard = () => {
                                 </div>
                             ) : (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm whitespace-nowrap">
+                                    <table className="w-full min-w-[540px] text-left text-sm whitespace-nowrap">
                                         <thead className="bg-stone-50 text-stone-500 font-medium tracking-wide uppercase text-[10px]">
                                             <tr>
                                                 <th className="px-6 py-4">Date</th>
@@ -561,75 +565,120 @@ const OwnerDashboard = () => {
                                                     <div className="w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                                                 </div>
                                             ) : (
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-left text-sm whitespace-nowrap">
-                                                        <thead className="bg-stone-50 text-stone-500 font-medium tracking-wide uppercase text-[10px]">
-                                                            <tr>
-                                                                <th className="px-6 py-4">Guest Name</th>
-                                                                <th className="px-6 py-4">People</th>
-                                                                <th className="px-6 py-4">Dates & Package</th>
-                                                                <th className="px-6 py-4">Status & Action</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-stone-100">
-                                                            {confirmedBookings.map((booking) => (
-                                                                <tr key={booking._id} className="hover:bg-stone-50/50">
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="font-semibold text-stone-900">{booking.customerName}</div>
-                                                                        <div className="text-xs text-stone-500 mt-1">{booking.customerPhone}</div>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700">
-                                                                            {booking.guests} Guest{booking.guests !== 1 ? 's' : ''}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="text-stone-700 font-medium">
-                                                                            {new Date(booking.checkIn).toLocaleDateString()} → {new Date(booking.checkOut).toLocaleDateString()}
-                                                                        </div>
-                                                                        <div className="text-xs text-stone-500 mt-1">{booking.packageType} ({booking.nights}N)</div>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex flex-col gap-2">
-                                                                            {/* Booking Status */}
-                                                                            {booking.status === 'confirmed' ? (
-                                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 w-max">
-                                                                                    Confirmed
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 w-max">
-                                                                                    Pending
-                                                                                </span>
-                                                                            )}
-                                                                            
-                                                                            {/* Owner Response Actions */}
-                                                                            {booking.ownerResponse?.status === 'pending' && booking.status === 'pending' && (
-                                                                                <div className="flex items-center gap-2 mt-1">
-                                                                                    <button 
-                                                                                        onClick={() => handleOwnerResponse(booking._id, 'accepted')}
-                                                                                        className="px-2 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded hover:bg-emerald-700 transition-colors"
-                                                                                    >
-                                                                                        Accept
-                                                                                    </button>
-                                                                                    <button 
-                                                                                        onClick={() => handleOwnerResponse(booking._id, 'rejected')}
-                                                                                        className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-bold rounded hover:bg-red-200 transition-colors"
-                                                                                    >
-                                                                                        Reject
-                                                                                    </button>
-                                                                                </div>
-                                                                            )}
-                                                                            
-                                                                            {booking.ownerResponse?.status === 'accepted' && (
-                                                                                <span className="text-[10px] font-medium text-emerald-600">✓ You Accepted</span>
-                                                                            )}
-                                                                        </div>
-                                                                    </td>
+                                                <>
+                                                    {/* Desktop Table */}
+                                                    <div className="hidden md:block overflow-x-auto">
+                                                        <table className="w-full min-w-[650px] text-left text-sm whitespace-nowrap">
+                                                            <thead className="bg-stone-50 text-stone-500 font-medium tracking-wide uppercase text-[10px]">
+                                                                <tr>
+                                                                    <th className="px-6 py-4">Guest Name</th>
+                                                                    <th className="px-6 py-4">People</th>
+                                                                    <th className="px-6 py-4">Dates & Package</th>
+                                                                    <th className="px-6 py-4">Status & Action</th>
                                                                 </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-stone-100">
+                                                                {confirmedBookings.map((booking) => (
+                                                                    <tr key={booking._id} className="hover:bg-stone-50/50">
+                                                                        <td className="px-6 py-4">
+                                                                            <div className="font-semibold text-stone-900">{booking.customerName}</div>
+                                                                            <div className="text-xs text-stone-500 mt-1">{booking.customerPhone}</div>
+                                                                        </td>
+                                                                        <td className="px-6 py-4">
+                                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700">
+                                                                                {booking.guests} Guest{booking.guests !== 1 ? 's' : ''}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-4">
+                                                                            <div className="text-stone-700 font-medium">
+                                                                                {new Date(booking.checkIn).toLocaleDateString()} → {new Date(booking.checkOut).toLocaleDateString()}
+                                                                            </div>
+                                                                            <div className="text-xs text-stone-500 mt-1">{booking.packageType} ({booking.nights}N)</div>
+                                                                        </td>
+                                                                        <td className="px-6 py-4">
+                                                                            <div className="flex flex-col gap-2">
+                                                                                {/* Booking Status */}
+                                                                                {booking.status === 'confirmed' ? (
+                                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 w-max">
+                                                                                        Confirmed
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 w-max">
+                                                                                        Pending
+                                                                                    </span>
+                                                                                )}
+                                                                                
+                                                                                {/* Owner Response Actions */}
+                                                                                {booking.ownerResponse?.status === 'pending' && booking.status === 'pending' && (
+                                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                                        <button 
+                                                                                            onClick={() => handleOwnerResponse(booking._id, 'accepted')}
+                                                                                            className="px-2 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded hover:bg-emerald-700 transition-colors"
+                                                                                        >
+                                                                                            Accept
+                                                                                        </button>
+                                                                                        <button 
+                                                                                            onClick={() => handleOwnerResponse(booking._id, 'rejected')}
+                                                                                            className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-bold rounded hover:bg-red-200 transition-colors"
+                                                                                        >
+                                                                                            Reject
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                                
+                                                                                {booking.ownerResponse?.status === 'accepted' && (
+                                                                                    <span className="text-[10px] font-medium text-emerald-600">✓ You Accepted</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+
+                                                    {/* Mobile Cards */}
+                                                    <div className="md:hidden flex flex-col gap-3 p-4">
+                                                        {confirmedBookings.map((b) => (
+                                                            <div key={b._id} className="bg-stone-50 border border-stone-200 rounded-2xl p-4 flex flex-col gap-2.5">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div>
+                                                                        <p className="font-bold text-stone-900">{b.customerName}</p>
+                                                                        <p className="text-xs text-stone-500">{b.customerPhone}</p>
+                                                                    </div>
+                                                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                                                                        b.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                                                    }`}>
+                                                                        {b.status === 'confirmed' ? 'Confirmed' : 'Pending'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="text-xs text-stone-600 bg-white rounded-xl p-2.5 border border-stone-100 flex justify-between">
+                                                                    <span>{new Date(b.checkIn).toLocaleDateString()} → {new Date(b.checkOut).toLocaleDateString()} ({b.nights}N)</span>
+                                                                    <span className="font-bold text-blue-700">{b.guests} Guests</span>
+                                                                </div>
+                                                                {b.ownerResponse?.status === 'pending' && b.status === 'pending' && (
+                                                                    <div className="flex gap-2 pt-1">
+                                                                        <button 
+                                                                            onClick={() => handleOwnerResponse(b._id, 'accepted')} 
+                                                                            className="flex-1 py-2.5 bg-emerald-600 text-white font-bold text-xs rounded-xl hover:bg-emerald-700 transition-colors"
+                                                                        >
+                                                                            Accept Booking
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleOwnerResponse(b._id, 'rejected')} 
+                                                                            className="flex-1 py-2.5 bg-red-100 text-red-700 font-bold text-xs rounded-xl hover:bg-red-200 transition-colors"
+                                                                        >
+                                                                            Reject Booking
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                                {b.ownerResponse?.status === 'accepted' && (
+                                                                    <p className="text-xs font-semibold text-emerald-600 text-center py-1">✓ You Accepted this booking</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </>
                                             )}
                                         </div>
                                     )}

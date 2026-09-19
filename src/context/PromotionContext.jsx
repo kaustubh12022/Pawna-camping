@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 const PromotionContext = createContext();
 
@@ -15,8 +16,7 @@ export const PromotionProvider = ({ children }) => {
     useEffect(() => {
         const fetchPromotion = async () => {
             try {
-                // Determine API URL (fallback for development if needed)
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                const apiUrl = API_BASE_URL;
                 
                 const response = await fetch(`${apiUrl}/api/promotions/current`);
                 if (!response.ok) {

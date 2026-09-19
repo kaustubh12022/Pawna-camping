@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { usePromotion } from '../context/PromotionContext';
 import Reviews from '../components/Reviews';
+import { API_BASE_URL } from '../config/api';
 
 const isVideo = (url) => {
     if (!url) return false;
@@ -25,13 +26,12 @@ const VillaDetail = () => {
     const { discountPercent, calculateMRP } = usePromotion();
     const [property, setProperty] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeImage, setActiveImage] = useState(0);
     const [whatsappNumber, setWhatsappNumber] = useState('919975526627');
 
     useEffect(() => {
         const fetchProperty = async () => {
             try {
-                const propRes = await fetch(`${import.meta.env.VITE_API_URL}/api/properties/${slug}`);
+                const propRes = await fetch(`${API_BASE_URL}/api/properties/${slug}`);
                 if (!propRes.ok) throw new Error('Failed to fetch property');
                 const propData = await propRes.json();
                 setProperty(propData);
@@ -51,7 +51,7 @@ const VillaDetail = () => {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+                const response = await fetch(`${API_BASE_URL}/api/settings`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.whatsappNumber) setWhatsappNumber(data.whatsappNumber);
@@ -91,7 +91,7 @@ const VillaDetail = () => {
         : [(typeof property.coverImage === 'string' ? property.coverImage : property.coverImage?.url), '/IMG-20220611-WA0013.jpg', '/Pawna-Heart-Camp-01.webp', '/Pawna-lake-camp-04.jpg', '/fzpesczo08lpcgqo7bz1.jpg'].filter(Boolean);
 
     return (
-        <div className="min-h-screen bg-[var(--listing-bg)] text-[var(--listing-text-primary)] pb-20 lg:pb-0 transition-colors duration-500">
+        <div className="min-h-screen bg-[var(--listing-bg)] text-[var(--listing-text-primary)] pb-28 lg:pb-0 transition-colors duration-500">
             <Helmet>
                 <title>{property.name} | Luxury Villas</title>
                 <meta name="description" content={property.shortDescription || 'Experience luxury with our exclusive villas.'} />
@@ -121,8 +121,7 @@ const VillaDetail = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.6 }}
-                        className="col-span-2 row-span-2 relative group cursor-pointer overflow-hidden"
-                        onClick={() => setActiveImage(0)}
+                        className="col-span-2 row-span-2 relative group overflow-hidden"
                     >
                         <MediaRenderer src={galleryImages[0]} alt={property.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     </motion.div>
@@ -132,8 +131,7 @@ const VillaDetail = () => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6, delay: 0.1 * (i + 1) }}
-                            className="relative group cursor-pointer overflow-hidden"
-                            onClick={() => setActiveImage(i + 1)}
+                            className="relative group overflow-hidden"
                         >
                             <MediaRenderer src={img} alt={`${property.name} ${i + 2}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                         </motion.div>
@@ -295,11 +293,11 @@ const VillaDetail = () => {
                                     onClick={handleBookVilla}
                                     className="w-full py-3.5 bg-[var(--listing-accent)] text-white rounded-xl text-sm font-bold tracking-wide hover:opacity-90 transition-opacity active:scale-[0.98]"
                                 >
-                                    Contact Owner
+                                    Reserve Villa
                                 </button>
                                 
                                 <p className="text-[10px] text-[var(--listing-text-secondary)] text-center leading-tight mt-3">
-                                    This will redirect you to WhatsApp after form filling. No charges will be applied.
+                                    Reserve online with zero upfront payment • Instant WhatsApp confirmation
                                 </p>
 
                                 <div className="mt-6 text-center">
@@ -322,7 +320,7 @@ const VillaDetail = () => {
             </div>
 
             {/* Mobile: Fixed Bottom Booking Bar */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#FDFBF7]/95 backdrop-blur-xl border-t border-[#E8E1D9] px-4 py-3 flex items-center justify-between safe-bottom">
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#FDFBF7]/95 backdrop-blur-xl border-t border-[#E8E1D9] px-4 py-3 flex items-center justify-between safe-bottom">
                     <div className="flex flex-col">
                         {(() => {
                             const finalPrice = property.pricing?.weekdayPrice !== property.pricing?.weekendPrice 
@@ -354,7 +352,7 @@ const VillaDetail = () => {
                     onClick={handleBookVilla}
                     className="px-6 py-3 bg-[#2C1D10] text-[#FDFBF7] text-xs font-semibold tracking-widest uppercase active:scale-[0.96] transition-transform whitespace-nowrap"
                 >
-                    Contact Owner
+                    Reserve Villa
                 </button>
             </div>
 

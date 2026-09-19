@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Building2,
@@ -11,8 +11,9 @@ import {
     Home,
     AlertCircle,
 } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
 
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = API_BASE_URL;
 
 const DashboardHome = () => {
     const navigate = useNavigate();
@@ -30,13 +31,9 @@ const DashboardHome = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    useEffect(() => {
-        fetchDashboardData();
-    }, []);
-
     const getToken = () => localStorage.getItem('managerToken');
 
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = useCallback(async () => {
         const token = getToken();
         if (!token) return navigate('/manager/login');
 
@@ -76,7 +73,11 @@ const DashboardHome = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [navigate]);
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, [fetchDashboardData]);
 
     if (isLoading) {
         return (

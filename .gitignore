@@ -31,3 +31,6 @@ dist-ssr
 
 # Dev Scripts
 scripts/
+
+# Agent scratch directory
+.agents/

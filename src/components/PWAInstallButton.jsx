@@ -3,16 +3,30 @@ import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PWAInstallButton = () => {
-    const [deferredPrompt, setDeferredPrompt] = useState(null);
-    const [isVisible, setIsVisible] = useState(false);
-    const [isInstalled, setIsInstalled] = useState(false);
+    const [deferredPrompt, setDeferredPrompt] = useState(() => {
+        if (typeof window !== 'undefined' && window.deferredPrompt) {
+            return window.deferredPrompt;
+        }
+        return null;
+    });
+    const [isVisible, setIsVisible] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        const dismissedAt = localStorage.getItem('pwa-install-dismissed');
+        if (dismissedAt && Date.now() - parseInt(dismissedAt) < 24 * 60 * 60 * 1000) {
+            return false;
+        }
+        return Boolean(window.deferredPrompt);
+    });
+    const [isInstalled, setIsInstalled] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return Boolean(window.matchMedia?.('(display-mode: standalone)').matches || window.navigator?.standalone);
+    });
     const [showToast, setShowToast] = useState(false);
     const location = useLocation();
 
     useEffect(() => {
         // Check if already installed
         if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-            setIsInstalled(true);
             return;
         }
 
@@ -20,12 +34,6 @@ const PWAInstallButton = () => {
         const dismissedAt = localStorage.getItem('pwa-install-dismissed');
         if (dismissedAt && Date.now() - parseInt(dismissedAt) < 24 * 60 * 60 * 1000) {
             return;
-        }
-
-        // If there's already a stashed prompt from index.html, grab it
-        if (window.deferredPrompt) {
-            setDeferredPrompt(window.deferredPrompt);
-            setIsVisible(true);
         }
 
         const handleBeforeInstallPrompt = (e) => {

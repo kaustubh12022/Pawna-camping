@@ -9,16 +9,24 @@ const getBlockedDates = async (req, res) => {
         const { propertyId } = req.query;
         let query = {};
 
-        if (propertyId) {
-            query.property = propertyId;
-        } else if (req.user && req.user.role === 'owner') {
-            const ownerPropertyIds = req.user.properties || [];
-            if (ownerPropertyIds.length === 0) {
-                return res.status(200).json([]);
+        if (req.user && req.user.role === 'owner') {
+            const ownerPropertyIds = (req.user.properties || []).map(p => p.toString());
+            if (propertyId) {
+                if (!ownerPropertyIds.includes(propertyId.toString())) {
+                    return res.status(403).json({ message: 'Access denied: not your property' });
+                }
+                query.property = propertyId;
+            } else {
+                if (ownerPropertyIds.length === 0) {
+                    return res.status(200).json([]);
+                }
+                query.property = { $in: ownerPropertyIds };
             }
-            query.property = { $in: ownerPropertyIds };
         } else if (req.user && req.user.role === 'manager') {
-            // Manager requesting all blocked dates
+            if (propertyId) {
+                query.property = propertyId;
+            }
+            // If no propertyId, manager retrieves all blocked dates across the platform
         } else {
             return res.status(400).json({ message: 'propertyId is required' });
         }
@@ -37,10 +45,14 @@ const createBlockedDate = async (req, res) => {
     try {
         const { property, startDate, endDate, reason } = req.body;
 
+        if (!property || !startDate) {
+            return res.status(400).json({ message: 'Property and Start Date are required' });
+        }
+
         // Validation: if owner, ensure they own the property
-        if (req.user.role === 'owner') {
-            const ownerPropertyIds = req.user.properties || [];
-            if (!ownerPropertyIds.some(p => p.toString() === property)) {
+        if (req.user && req.user.role === 'owner') {
+            const ownerPropertyIds = (req.user.properties || []).map(p => p.toString());
+            if (!ownerPropertyIds.includes(property.toString())) {
                 return res.status(403).json({ message: 'Access denied: not your property' });
             }
         }
@@ -48,7 +60,7 @@ const createBlockedDate = async (req, res) => {
         const blockedDate = await BlockedDate.create({
             property,
             startDate,
-            endDate,
+            endDate: endDate || startDate,
             reason: reason || '',
             blockedBy: req.user._id
         });

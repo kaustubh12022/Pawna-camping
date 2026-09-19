@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Calendar, Trash2, Plus, AlertCircle, MapPin } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
+import { useToast } from '../../context/ToastContext';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const BlockedDatesManagement = ({ selectedProperty, properties }) => {
+    const { toast } = useToast();
     const [blockedDates, setBlockedDates] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
 
     // Form state
     const [startDate, setStartDate] = useState('');
@@ -25,7 +27,7 @@ const BlockedDatesManagement = ({ selectedProperty, properties }) => {
         }
     }, [selectedProperty, properties, propertyToBlock]);
 
-    const fetchBlockedDates = async () => {
+    const fetchBlockedDates = useCallback(async () => {
         setIsLoading(true);
         try {
             const token = localStorage.getItem('ownerToken');
@@ -40,19 +42,19 @@ const BlockedDatesManagement = ({ selectedProperty, properties }) => {
             const data = await res.json();
             setBlockedDates(data);
         } catch (err) {
-            setError(err.message);
+            toast.error(err.message);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [selectedProperty, toast]);
 
     useEffect(() => {
         fetchBlockedDates();
-    }, [selectedProperty]);
+    }, [fetchBlockedDates]);
 
     const handleBlockDates = async (e) => {
         e.preventDefault();
-        if (!startDate || !propertyToBlock) return alert('Property and Start Date are required');
+        if (!startDate || !propertyToBlock) return toast.warning('Property and Start Date are required');
         
         setIsSubmitting(true);
         try {
@@ -79,8 +81,9 @@ const BlockedDatesManagement = ({ selectedProperty, properties }) => {
             setStartDate('');
             setEndDate('');
             fetchBlockedDates();
+            toast.success('Dates blocked successfully');
         } catch (err) {
-            alert(err.message);
+            toast.error(err.message);
         } finally {
             setIsSubmitting(false);
         }
@@ -96,8 +99,9 @@ const BlockedDatesManagement = ({ selectedProperty, properties }) => {
             });
             if (!res.ok) throw new Error('Failed to unblock');
             setBlockedDates(prev => prev.filter(b => b._id !== id));
+            toast.success('Dates unblocked successfully');
         } catch (err) {
-            alert(err.message);
+            toast.error(err.message);
         }
     };
 

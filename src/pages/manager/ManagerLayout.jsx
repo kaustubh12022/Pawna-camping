@@ -12,13 +12,16 @@ import {
     ChevronRight,
     Tent,
     LineChart,
-    Star
+    Star,
+    Package
 } from 'lucide-react';
 import ManualInstallButton from '../../components/ManualInstallButton';
+import { API_BASE_URL } from '../../config/api';
 
 const NAV_ITEMS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/manager' },
     { id: 'properties', label: 'Properties', icon: Building2, path: '/manager/properties' },
+    { id: 'packages', label: 'Packages', icon: Package, path: '/manager/packages' },
     { id: 'bookings', label: 'Bookings', icon: CalendarCheck, path: '/manager/bookings' },
     { id: 'revenue', label: 'Revenue', icon: LineChart, path: '/manager/revenue' },
     { id: 'owners', label: 'Owners', icon: Users, path: '/manager/owners' },
@@ -32,9 +35,11 @@ const ManagerLayout = ({ children }) => {
     const location = useLocation();
 
     // Close sidebar on route change (mobile)
-    useEffect(() => {
+    const [prevPath, setPrevPath] = useState(location.pathname);
+    if (prevPath !== location.pathname) {
+        setPrevPath(location.pathname);
         setSidebarOpen(false);
-    }, [location.pathname]);
+    }
 
     // Check auth on mount and subscribe to push notifications
     useEffect(() => {
@@ -76,7 +81,7 @@ const ManagerLayout = ({ children }) => {
                 });
 
                 // Send subscription to backend
-                await fetch(`${import.meta.env.VITE_API_URL || ''}/api/notifications/subscribe`, {
+                await fetch(`${API_BASE_URL}/api/notifications/subscribe`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -92,7 +97,7 @@ const ManagerLayout = ({ children }) => {
         // Utility to convert VAPID key
         function urlBase64ToUint8Array(base64String) {
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
             const rawData = window.atob(base64);
             const outputArray = new Uint8Array(rawData.length);
             for (let i = 0; i < rawData.length; ++i) {
@@ -230,7 +235,7 @@ const ManagerLayout = ({ children }) => {
             </div>
 
             {/* BOTTOM NAV (mobile only) */}
-            <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 z-50 flex items-center justify-around px-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.02)]">
+            <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 z-50 flex items-center justify-between sm:justify-around px-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-hide">
                 {NAV_ITEMS.map(item => {
                     const Icon = item.icon;
                     const isActive = activeNav === item.id;
@@ -238,12 +243,12 @@ const ManagerLayout = ({ children }) => {
                         <button
                             key={item.id}
                             onClick={() => navigate(item.path)}
-                            className={`flex flex-col items-center py-2.5 px-3 gap-1 min-w-[64px] transition-colors ${isActive ? 'text-emerald-600' : 'text-stone-400 hover:text-stone-600'}`}
+                            className={`flex flex-col items-center py-2 px-2.5 gap-1 shrink-0 min-w-[54px] transition-colors ${isActive ? 'text-emerald-600' : 'text-stone-400 hover:text-stone-600'}`}
                         >
                             <Icon className={`w-5 h-5 ${isActive ? 'text-emerald-600' : 'text-stone-400'}`} />
-                            <span className={`text-[10px] font-medium tracking-wide ${isActive ? 'text-emerald-700 font-bold' : ''}`}>{item.label}</span>
+                            <span className={`text-[9px] sm:text-[10px] font-medium tracking-wide ${isActive ? 'text-emerald-700 font-bold' : ''}`}>{item.label}</span>
                         </button>
-                    )
+                    );
                 })}
             </nav>
         </div>

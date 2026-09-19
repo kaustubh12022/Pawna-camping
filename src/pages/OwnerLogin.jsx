@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config/api';
 
 const OwnerLogin = () => {
     const [email, setEmail] = useState('');
@@ -17,7 +18,7 @@ const OwnerLogin = () => {
             // ==========================================
             // AUTH LOGIC
             // ==========================================
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
+            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })

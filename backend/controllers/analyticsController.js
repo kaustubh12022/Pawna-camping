@@ -18,17 +18,30 @@ const buildMatchStage = (query, userPropertyIds = null) => {
         }
     }
 
-    // PHASE 2: PROPERTY FILTER
-    if (query.propertyId) {
-        // Specific property requested
-        matchStage.property = new mongoose.Types.ObjectId(query.propertyId);
-    } else if (userPropertyIds && userPropertyIds.length > 0) {
-        // Owner scope: restrict to all their properties
-        matchStage.property = {
-            $in: userPropertyIds.map(id => new mongoose.Types.ObjectId(id.toString()))
-        };
+    // PROPERTY FILTER: Enforce role-based property boundaries
+    if (userPropertyIds !== null) {
+        // Caller is an Owner: restrict strictly to assigned properties
+        const ownerIds = userPropertyIds.map(id => id.toString());
+        if (query.propertyId) {
+            if (ownerIds.includes(query.propertyId.toString())) {
+                matchStage.property = new mongoose.Types.ObjectId(query.propertyId);
+            } else {
+                // Property not owned: enforce 0 matches
+                matchStage.property = new mongoose.Types.ObjectId('000000000000000000000000');
+            }
+        } else {
+            // Scope to all owned properties (if empty array, $in: [] matches 0 records)
+            matchStage.property = {
+                $in: userPropertyIds.map(id => new mongoose.Types.ObjectId(id.toString()))
+            };
+        }
+    } else {
+        // Caller is a Manager (userPropertyIds === null)
+        if (query.propertyId) {
+            matchStage.property = new mongoose.Types.ObjectId(query.propertyId);
+        }
+        // If no propertyId: global across all properties
     }
-    // If no propertyId and no userPropertyIds: global (manager, no scope)
 
     return matchStage;
 };
@@ -277,27 +290,39 @@ const getOwnerRevenue = async (req, res) => {
     try {
         const Revenue = require('../models/Revenue');
         const userPropertyIds = resolvePropertyScope(req);
+        const isManager = req.user && req.user.role === 'manager';
         
         let targetPropertyIds = userPropertyIds;
         if (req.query.propertyId) {
-            // Ensure the requested property is actually owned by the user
-            if (userPropertyIds.some(id => id.toString() === req.query.propertyId)) {
+            if (isManager) {
                 targetPropertyIds = [req.query.propertyId];
             } else {
-                return res.status(403).json({ message: 'Access denied for this property' });
+                // Owner: ensure the requested property is actually owned by the user
+                const ownerIds = (userPropertyIds || []).map(id => id.toString());
+                if (ownerIds.includes(req.query.propertyId.toString())) {
+                    targetPropertyIds = [req.query.propertyId];
+                } else {
+                    return res.status(403).json({ message: 'Access denied for this property' });
+                }
+            }
+        } else if (!isManager) {
+            // Owner without propertyId: if they have no properties, return empty list
+            if (!userPropertyIds || userPropertyIds.length === 0) {
+                return res.status(200).json([]);
             }
         }
         
-        const objectIdTargets = targetPropertyIds.map(id => new mongoose.Types.ObjectId(id.toString()));
-        
         const bookingMatch = {
-            property: { $in: objectIdTargets },
             status: { $ne: 'cancelled' }
         };
-        
-        const revenueMatch = {
-            property: { $in: objectIdTargets }
-        };
+        const revenueMatch = {};
+
+        // Scope queries to target properties if specified
+        if (targetPropertyIds && targetPropertyIds.length > 0) {
+            const objectIdTargets = targetPropertyIds.map(id => new mongoose.Types.ObjectId(id.toString()));
+            bookingMatch.property = { $in: objectIdTargets };
+            revenueMatch.property = { $in: objectIdTargets };
+        }
 
         if (req.query.date) {
             const targetDate = new Date(req.query.date);

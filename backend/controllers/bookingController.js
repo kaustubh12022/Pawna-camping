@@ -60,6 +60,57 @@ const checkCapacityOverlap = async (packageType, checkIn, checkOut, propertyId =
 };
 
 // ==========================================
+// SERVER-SIDE PRICING CALCULATION HELPER
+// ==========================================
+const calculateServerTotalPrice = async ({ property, propertyType, packageType, checkIn, checkOut, guests }) => {
+    if (!checkIn || !checkOut) return 0;
+
+    const start = new Date(checkIn);
+    const end = new Date(checkOut);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays <= 0) return 0;
+
+    let weekdayPrice = 0;
+    let weekendPrice = 0;
+    let perUnitMultiplier = 1;
+
+    if (propertyType === 'villa') {
+        weekdayPrice = property?.pricing?.weekdayPrice || 0;
+        weekendPrice = property?.pricing?.weekendPrice || 0;
+        perUnitMultiplier = 1; // Villas are priced per whole property per night
+    } else {
+        // Campsite package: look up package for this property or global fallback
+        let pkg = null;
+        if (property?._id) {
+            pkg = await Package.findOne({ title: packageType, property: property._id });
+        }
+        if (!pkg) {
+            pkg = await Package.findOne({ title: packageType });
+        }
+        if (pkg) {
+            weekdayPrice = pkg.weekdayPrice || 0;
+            weekendPrice = pkg.weekendPrice || 0;
+            perUnitMultiplier = Number(guests) || 1; // Campsites are priced per person
+        }
+    }
+
+    let totalPerUnit = 0;
+    const current = new Date(start);
+    for (let i = 0; i < diffDays; i++) {
+        const day = current.getDay(); // 0 = Sunday, 6 = Saturday
+        if (day === 0 || day === 6) {
+            totalPerUnit += weekendPrice;
+        } else {
+            totalPerUnit += weekdayPrice;
+        }
+        current.setDate(current.getDate() + 1);
+    }
+
+    return totalPerUnit * perUnitMultiplier;
+};
+
+// ==========================================
 // CREATE NEW BOOKING
 // ==========================================
 
@@ -78,6 +129,7 @@ const createBooking = async (req, res) => {
             foodPreference,
             customerName,
             customerPhone,
+            customerEmail,
             totalPrice,     // PHASE 2: Accept calculated total price
             propertyId,      // PHASE 2: Optional — null for legacy bookings
             botField        // Spam prevention honeypot
@@ -87,6 +139,13 @@ const createBooking = async (req, res) => {
         if (botField) {
             // A bot filled in the hidden field
             return res.status(400).json({ message: 'Invalid request payload' });
+        }
+
+        // PHONE NUMBER FORMAT VALIDATION (10-digit Indian format /^[6-9]\d{9}$/)
+        const cleanPhone = (customerPhone || '').toString().replace(/[\s+-]/g, '');
+        const normalizedPhone = cleanPhone.length > 10 && cleanPhone.startsWith('91') ? cleanPhone.slice(2) : cleanPhone;
+        if (!/^[6-9]\d{9}$/.test(normalizedPhone)) {
+            return res.status(400).json({ message: 'Please enter a valid 10-digit Indian phone number starting with 6-9' });
         }
 
         // PAST DATE VALIDATION
@@ -101,23 +160,31 @@ const createBooking = async (req, res) => {
         // PHASE 2: Resolve property and propertyType if propertyId is given
         let propertyRef = null;
         let propertyType = null;
+        let propertyDoc = null;
 
         if (propertyId) {
-            const property = await Property.findById(propertyId);
-            if (!property) {
+            propertyDoc = await Property.findById(propertyId);
+            if (!propertyDoc) {
                 return res.status(400).json({ message: 'Invalid propertyId — property not found' });
             }
-            propertyRef = property._id;
-            propertyType = property.type; // 'campsite' or 'villa'
+            propertyRef = propertyDoc._id;
+            propertyType = propertyDoc.type; // 'campsite' or 'villa'
+
+            // CAPACITY CHECK: Validate guests against property.maxGuests
+            if (propertyDoc.maxGuests && Number(guests) > propertyDoc.maxGuests) {
+                return res.status(400).json({
+                    message: `Number of guests (${guests}) exceeds maximum capacity of ${propertyDoc.maxGuests} for this property`
+                });
+            }
         }
 
-        // PHASE 5E: BLOCKED DATES CHECK
+        // PHASE 5E: BLOCKED DATES CHECK (Fixed single-day overlap with $gte)
         if (propertyRef) {
             const blocked = await BlockedDate.findOne({
                 property: propertyRef,
                 $and: [
                     { startDate: { $lt: new Date(checkOut) } },
-                    { endDate: { $gt: new Date(checkIn) } }
+                    { endDate: { $gte: new Date(checkIn) } }
                 ]
             });
             
@@ -136,9 +203,43 @@ const createBooking = async (req, res) => {
             });
         }
 
-        // VILLA BOOKINGS: Strip food preference — villas don't have food service.
-        // Even if frontend sends food data for a villa, we discard it here.
-        const isVilla = propertyType === 'villa';
+        // SERVER-SIDE TOTAL PRICE CALCULATION & VERIFICATION
+        let finalPrice = Number(totalPrice) || 0;
+        if (propertyDoc) {
+            const calculatedServerPrice = await calculateServerTotalPrice({
+                property: propertyDoc,
+                propertyType,
+                packageType,
+                checkIn,
+                checkOut,
+                guests: Number(guests)
+            });
+
+            if (calculatedServerPrice > 0) {
+                const isManager = req.user && req.user.role === 'manager';
+                // Public users or submissions with 0/tampered price are strictly overridden
+                if (!isManager || !totalPrice) {
+                    finalPrice = calculatedServerPrice;
+                }
+            }
+        }
+
+        // CAMPSITE MEAL COUNT PARITY
+        // Defensive check: meal counts cannot be negative
+        if (!(Number(vegGuests || 0) >= 0 && Number(nonVegGuests || 0) >= 0)) {
+            return res.status(400).json({ message: 'Meal counts cannot be negative' });
+        }
+
+        // For campsites, veg + non-veg meals must equal the guest count
+        const isVilla = propertyType === 'villa' || packageType === 'Villa Booking';
+        if (!isVilla) {
+            const totalMeals = (Number(vegGuests) || 0) + (Number(nonVegGuests) || 0);
+            if (totalMeals !== Number(guests)) {
+                return res.status(400).json({
+                    message: `Total veg and non-veg meals (${totalMeals}) must match the number of guests (${guests})`
+                });
+            }
+        }
 
         // CREATE BOOKING
         const booking = await Booking.create({
@@ -150,8 +251,9 @@ const createBooking = async (req, res) => {
             nonVegGuests: isVilla ? 0 : (nonVegGuests || 0),
             foodPreference: isVilla ? undefined : foodPreference,
             customerName,
-            customerPhone,
-            totalPrice: totalPrice || 0,
+            customerPhone: normalizedPhone,
+            customerEmail: customerEmail ? customerEmail.trim() : undefined,
+            totalPrice: finalPrice,
             addedBy: req.user ? req.user._id : undefined,
             property: propertyRef,
             propertyType: propertyType
@@ -284,13 +386,13 @@ const updateBookingStatus = async (req, res) => {
         }
 
         if (status === 'confirmed') {
-            // PHASE 5E: BLOCKED DATES CHECK
+            // PHASE 5E: BLOCKED DATES CHECK (Fixed single-day overlap with $gte)
             if (booking.property) {
                 const blocked = await BlockedDate.findOne({
                     property: booking.property,
                     $and: [
                         { startDate: { $lt: new Date(booking.checkOut) } },
-                        { endDate: { $gt: new Date(booking.checkIn) } }
+                        { endDate: { $gte: new Date(booking.checkIn) } }
                     ]
                 });
                 

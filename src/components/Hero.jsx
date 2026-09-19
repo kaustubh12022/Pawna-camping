@@ -8,6 +8,7 @@ const Hero = () => {
             <div className="absolute inset-0 z-0 bg-stone-900">
                 <video
                     src="/hero.mp4"
+                    poster="/Pawna-Heart-Camp-01.webp"
                     autoPlay
                     loop
                     muted

@@ -45,6 +45,11 @@ const bookingSchema = new mongoose.Schema({
         required: [true, 'Customer phone is required'],
         match: [/^[+]?[0-9\s-]{10,15}$/, 'Invalid phone number format']
     },
+    customerEmail: {
+        type: String,
+        trim: true,
+        lowercase: true
+    },
     status: {
         type: String,
         enum: ['pending', 'confirmed', 'cancelled'],

@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit3, Trash2, X, Key, Building2, AlertCircle, Mail, Phone, UserPlus, TrendingUp, IndianRupee, Eye, EyeOff } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
+import { useToast } from '../../context/ToastContext';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const OwnerManagement = () => {
+    const { toast } = useToast();
     const navigate = useNavigate();
     const [owners, setOwners] = useState([]);
     const [properties, setProperties] = useState([]);
@@ -62,7 +65,8 @@ const OwnerManagement = () => {
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
             setShowForm(false); setFormData({ name: '', email: '', password: '', phone: '', propertyIds: [] });
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Owner created successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
     const handleUpdate = async (e) => {
@@ -75,7 +79,8 @@ const OwnerManagement = () => {
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
             setShowForm(false); setEditingId(null);
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Owner updated successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
     const handleDelete = async (id, name) => {
@@ -84,11 +89,12 @@ const OwnerManagement = () => {
             const res = await fetch(`${API}/api/owners/${id}`, { method: 'DELETE', headers: headers() });
             if (!res.ok) throw new Error('Failed to delete');
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Owner deleted successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
     const handleResetPassword = async () => {
-        if (!newPassword || newPassword.length < 6) return alert('Password must be at least 6 characters');
+        if (!newPassword || newPassword.length < 6) return toast.warning('Password must be at least 6 characters');
         try {
             const res = await fetch(`${API}/api/owners/${showPasswordReset}/reset-password`, {
                 method: 'PUT', headers: headers(), body: JSON.stringify({ newPassword })
@@ -96,9 +102,9 @@ const OwnerManagement = () => {
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
             // After reset, update the local owner list with the new password so manager sees it immediately
             setOwners(prev => prev.map(o => o._id === showPasswordReset ? { ...o, plainPassword: newPassword } : o));
-            alert('Password updated! The new password is now visible in the owner card.');
+            toast.success('Password updated! The new password is now visible in the owner card.');
             setShowPasswordReset(null); setNewPassword('');
-        } catch (err) { alert(err.message); }
+        } catch (err) { toast.error(err.message); }
     };
 
     const handleAssignProperties = async () => {
@@ -109,7 +115,8 @@ const OwnerManagement = () => {
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
             setShowAssignModal(null);
             fetchData();
-        } catch (err) { alert(err.message); }
+            toast.success('Properties assigned successfully');
+        } catch (err) { toast.error(err.message); }
     };
 
     const openEdit = (owner) => {
@@ -163,24 +170,24 @@ const OwnerManagement = () => {
                                             {owner.phone && <span className="text-xs text-stone-400 flex items-center gap-1"><Phone className="w-3 h-3" />{owner.phone}</span>}
                                         </div>
                                         {/* PASSWORD DISPLAY */}
-                                        <div className="mt-2 flex items-center gap-2 px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded-lg w-fit">
+                                        <div className="mt-2 flex items-center gap-2 px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded-lg w-fit max-w-full truncate">
                                             <Key className="w-3 h-3 text-amber-600 flex-shrink-0" />
-                                            <span className="text-xs font-semibold text-amber-700 mr-1">Password:</span>
+                                            <span className="text-xs font-semibold text-amber-700 mr-1 shrink-0">Password:</span>
                                             {owner.plainPassword ? (
                                                 <>
-                                                    <span className={`font-mono text-xs font-bold text-amber-900 ${showPasswords[owner._id] ? '' : 'blur-[3px] select-none'}`}>
+                                                    <span className={`font-mono text-xs font-bold text-amber-900 truncate ${showPasswords[owner._id] ? '' : 'blur-[3px] select-none'}`}>
                                                         {owner.plainPassword}
                                                     </span>
                                                     <button
                                                         onClick={() => setShowPasswords(p => ({ ...p, [owner._id]: !p[owner._id] }))}
-                                                        className="ml-1 text-amber-600 hover:text-amber-800 transition-colors"
+                                                        className="ml-1 text-amber-600 hover:text-amber-800 transition-colors shrink-0"
                                                         title={showPasswords[owner._id] ? 'Hide password' : 'Show password'}
                                                     >
                                                         {showPasswords[owner._id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                                     </button>
                                                 </>
                                             ) : (
-                                                <span className="text-xs text-amber-600 italic">Not set — use "Password" button to set one</span>
+                                                <span className="text-xs text-amber-600 italic truncate">Not set — use "Password" button to set one</span>
                                             )}
                                         </div>
                                     </div>
@@ -224,17 +231,17 @@ const OwnerManagement = () => {
 
                             {/* Actions */}
                             <div className="flex flex-col gap-3 pt-3 border-t border-stone-100">
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => openEdit(owner)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-stone-600 bg-stone-50 rounded-lg hover:bg-stone-100 transition-colors">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button onClick={() => openEdit(owner)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-stone-600 bg-stone-50 rounded-xl hover:bg-stone-100 transition-colors">
                                         <Edit3 className="w-3.5 h-3.5" /> Edit
                                     </button>
-                                    <button onClick={() => openAssign(owner)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                    <button onClick={() => openAssign(owner)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-600 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors">
                                         <Building2 className="w-3.5 h-3.5" /> Assign
                                     </button>
-                                    <button onClick={() => { setShowPasswordReset(showPasswordReset === owner._id ? null : owner._id); setNewPassword(''); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors">
+                                    <button onClick={() => { setShowPasswordReset(showPasswordReset === owner._id ? null : owner._id); setNewPassword(''); }} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-amber-600 bg-amber-50 rounded-xl hover:bg-amber-100 transition-colors">
                                         <Key className="w-3.5 h-3.5" /> Password
                                     </button>
-                                    <button onClick={() => handleDelete(owner._id, owner.name)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-400 hover:text-red-600 transition-colors ml-auto">
+                                    <button onClick={() => handleDelete(owner._id, owner.name)} className="p-2 rounded-xl hover:bg-red-50 text-stone-400 hover:text-red-600 transition-colors ml-auto" title="Delete owner">
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>

@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react';
+import { API_BASE_URL } from '../../config/api';
+import { useToast } from '../../context/ToastContext';
 
 const ImageUploader = ({ images, setImages, coverImage, setCoverImage }) => {
+    const { toast } = useToast();
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef(null);
 
     const handleFileSelect = async (e) => {
@@ -10,7 +12,6 @@ const ImageUploader = ({ images, setImages, coverImage, setCoverImage }) => {
         if (files.length === 0) return;
 
         setIsUploading(true);
-        setUploadProgress(0);
 
         const formData = new FormData();
         files.forEach(file => {
@@ -19,7 +20,7 @@ const ImageUploader = ({ images, setImages, coverImage, setCoverImage }) => {
 
         try {
             const token = localStorage.getItem('managerToken');
-            const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/upload/bulk`, {
+            const res = await fetch(`${API_BASE_URL}/api/upload/bulk`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -51,10 +52,11 @@ const ImageUploader = ({ images, setImages, coverImage, setCoverImage }) => {
                     publicId: newImages[0].publicId
                 });
             }
+            toast.success(`${newImages.length} image(s) uploaded successfully`);
 
         } catch (error) {
             console.error('Error uploading:', error);
-            alert(`Failed to upload images: ${error.message}`);
+            toast.error(`Failed to upload images: ${error.message}`);
         } finally {
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -71,6 +73,7 @@ const ImageUploader = ({ images, setImages, coverImage, setCoverImage }) => {
         // Re-calculate order
         newImages.forEach((img, i) => img.order = i);
         setImages(newImages);
+        toast.success('Image removed');
 
         // If it was the cover image, clear it
         if (coverImage?.publicId === publicId) {
@@ -81,7 +84,7 @@ const ImageUploader = ({ images, setImages, coverImage, setCoverImage }) => {
         if (publicId) {
             try {
                 const token = localStorage.getItem('managerToken');
-                await fetch(`${import.meta.env.VITE_API_URL || ''}/api/upload/${encodeURIComponent(publicId)}`, {
+                await fetch(`${API_BASE_URL}/api/upload/${encodeURIComponent(publicId)}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });

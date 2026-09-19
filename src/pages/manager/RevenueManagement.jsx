@@ -6,8 +6,10 @@ import {
 import {
     TrendingUp, IndianRupee, FileText, Plus, Search, Filter, Trash2, X, AlertCircle, Building2, ArrowUpDown
 } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
+import { useToast } from '../../context/ToastContext';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 // Recharts Custom Tooltip
 const CustomTooltip = ({ active, payload, label }) => {
@@ -29,6 +31,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 const COLORS = ['#10b981', '#0ea5e9', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b'];
 
 const RevenueManagement = () => {
+    const { toast } = useToast();
     const [overview, setOverview] = useState(null);
     const [trends, setTrends] = useState([]);
     const [byProperty, setByProperty] = useState([]);
@@ -139,8 +142,9 @@ const RevenueManagement = () => {
                 notes: ''
             });
             fetchData(); // Refresh everything
+            toast.success('Revenue entry added successfully');
         } catch (err) {
-            alert(err.message);
+            toast.error(err.message);
         }
     };
 
@@ -154,8 +158,9 @@ const RevenueManagement = () => {
             });
             if (!res.ok) throw new Error("Delete failed");
             fetchData();
+            toast.success('Revenue entry deleted successfully');
         } catch (err) {
-            alert(err.message);
+            toast.error(err.message);
         }
     };
 

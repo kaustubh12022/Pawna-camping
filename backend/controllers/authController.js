@@ -93,24 +93,28 @@ const updatePassword = async (req, res) => {
             return res.status(400).json({ message: 'New password must be at least 6 characters' });
         }
 
-        if (!userId && !email) {
-            return res.status(400).json({ message: 'Please provide either userId or email to identify the target user' });
-        }
-
         // ---- FIND TARGET USER ----
+        // 1. Explicit userId
+        // 2. Explicit email
+        // 3. Fallback to authenticated caller (req.user), e.g. manager updating their own password from Settings
         let userToUpdate;
         if (userId) {
             userToUpdate = await User.findById(userId);
-        } else {
+        } else if (email) {
             userToUpdate = await User.findOne({ email: email.trim().toLowerCase() });
+        } else if (req.user && req.user._id) {
+            userToUpdate = await User.findById(req.user._id);
+        } else {
+            return res.status(400).json({ message: 'Please provide either userId or email to identify the target user' });
         }
 
         if (!userToUpdate) {
             return res.status(404).json({ message: 'USER NOT FOUND' });
         }
 
-        // ---- UPDATE PASSWORD (pre-save hook hashes it) ----
+        // ---- UPDATE PASSWORD (pre-save hook hashes password; sync plainPassword) ----
         userToUpdate.password = newPassword;
+        userToUpdate.plainPassword = newPassword;
         await userToUpdate.save();
 
         res.status(200).json({

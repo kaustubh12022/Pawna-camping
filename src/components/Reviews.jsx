@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { API_BASE_URL } from '../config/api';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = API_BASE_URL;
 
 const Reviews = ({ propertyId }) => {
+    const { toast } = useToast();
     const [reviews, setReviews] = useState([]);
     const [properties, setProperties] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -19,12 +22,7 @@ const Reviews = ({ propertyId }) => {
         text: ''
     });
 
-    useEffect(() => {
-        fetchReviews();
-        if (!propertyId) fetchProperties();
-    }, [propertyId]);
-
-    const fetchReviews = async () => {
+    const fetchReviews = useCallback(async () => {
         try {
             const url = propertyId ? `${API}/api/reviews/${propertyId}` : `${API}/api/reviews`;
             const res = await fetch(url);
@@ -37,9 +35,9 @@ const Reviews = ({ propertyId }) => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [propertyId]);
 
-    const fetchProperties = async () => {
+    const fetchProperties = useCallback(async () => {
         try {
             const res = await fetch(`${API}/api/properties?isActive=true`);
             if (res.ok) {
@@ -49,10 +47,33 @@ const Reviews = ({ propertyId }) => {
         } catch (err) {
             console.error(err);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchReviews();
+        if (!propertyId) fetchProperties();
+    }, [propertyId, fetchReviews, fetchProperties]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!formData.reviewerName || formData.reviewerName.trim().length < 2) {
+            toast.warning("Please enter your name (at least 2 characters).");
+            return;
+        }
+        if (!formData.rating || formData.rating < 1 || formData.rating > 5) {
+            toast.warning("Please select a valid rating between 1 and 5 stars.");
+            return;
+        }
+        if (!formData.text || formData.text.trim().length < 10) {
+            toast.warning("Please enter a review of at least 10 characters.");
+            return;
+        }
+        if (formData.text.trim().length > 1000) {
+            toast.warning("Review cannot exceed 1000 characters.");
+            return;
+        }
+
         try {
             const res = await fetch(`${API}/api/reviews`, {
                 method: 'POST',
@@ -60,15 +81,15 @@ const Reviews = ({ propertyId }) => {
                 body: JSON.stringify(formData)
             });
             if (res.ok) {
-                alert("Review submitted successfully! It will appear once approved.");
+                toast.success("Review submitted successfully! It will appear once approved.");
                 setShowForm(false);
                 setFormData({ property: propertyId || '', reviewerName: '', reviewerEmail: '', reviewerPhone: '', rating: 5, text: '' });
             } else {
                 const d = await res.json();
-                alert(d.message || "Failed to submit review");
+                toast.error(d.message || "Failed to submit review");
             }
         } catch (err) {
-            alert(err.message);
+            toast.error(err.message || "Failed to submit review");
         }
     };
 

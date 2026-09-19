@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
+import { API_BASE_URL } from '../config/api';
 
 const WhatsAppButton = () => {
     const [whatsappNumber, setWhatsappNumber] = useState('919975526627');
@@ -9,7 +10,7 @@ const WhatsAppButton = () => {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
+                const response = await fetch(`${API_BASE_URL}/api/settings`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.whatsappNumber) setWhatsappNumber(data.whatsappNumber);
@@ -28,6 +29,8 @@ const WhatsAppButton = () => {
     const isPublicRoute = !location.pathname.startsWith('/manager') && !location.pathname.startsWith('/owner');
     if (!isPublicRoute) return null;
 
+    const hasBottomBar = location.pathname.startsWith('/campsite/') || location.pathname.startsWith('/villa/');
+
     return (
         <motion.button
             onClick={handleClick}
@@ -36,7 +39,7 @@ const WhatsAppButton = () => {
             transition={{ delay: 1, type: 'spring', stiffness: 260, damping: 20 }}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-[9999] w-14 h-14 sm:w-16 sm:h-16 bg-[#25D366] rounded-full flex items-center justify-center shadow-[0_4px_24px_rgba(37,211,102,0.4)] hover:shadow-[0_6px_32px_rgba(37,211,102,0.55)] transition-shadow cursor-pointer group"
+            className={`fixed ${hasBottomBar ? 'bottom-[calc(5.25rem+max(12px,env(safe-area-inset-bottom)))] lg:bottom-6' : 'bottom-6'} right-6 z-40 w-14 h-14 sm:w-16 sm:h-16 bg-[#25D366] rounded-full flex items-center justify-center shadow-[0_4px_24px_rgba(37,211,102,0.4)] hover:shadow-[0_6px_32px_rgba(37,211,102,0.55)] transition-all duration-300 cursor-pointer group`}
             aria-label="Contact us on WhatsApp"
             title="Chat with us on WhatsApp"
         >

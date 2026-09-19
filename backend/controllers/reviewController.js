@@ -38,6 +38,19 @@ const createReview = async (req, res) => {
         if (!property || !reviewerName || !rating || !text) {
             return res.status(400).json({ message: 'All fields are required' });
         }
+
+        if (typeof reviewerName !== 'string' || reviewerName.trim().length < 2) {
+            return res.status(400).json({ message: 'Reviewer name must be at least 2 characters' });
+        }
+
+        const numericRating = Number(rating);
+        if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+            return res.status(400).json({ message: 'Rating must be an integer between 1 and 5' });
+        }
+
+        if (typeof text !== 'string' || text.trim().length < 10 || text.trim().length > 1000) {
+            return res.status(400).json({ message: 'Review text must be between 10 and 1000 characters' });
+        }
         // Validate property exists (Handle invalid ObjectIds gracefully)
         const mongoose = require('mongoose');
         if (!mongoose.Types.ObjectId.isValid(property)) {

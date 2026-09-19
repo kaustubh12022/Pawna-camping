@@ -57,6 +57,30 @@ const createPackage = async (req, res) => {
             propertyId   // PHASE 2: Optional property linkage
         } = req.body;
 
+        // Multi-tenant authorization: Owners can only create packages for properties they own
+        if (!title || !title.trim()) {
+            return res.status(400).json({ message: 'Package title is required' });
+        }
+        if (maxCapacity !== undefined && (Number(maxCapacity) <= 0 || isNaN(Number(maxCapacity)))) {
+            return res.status(400).json({ message: 'Maximum capacity must be greater than 0' });
+        }
+        if (weekdayPrice !== undefined && Number(weekdayPrice) < 0) {
+            return res.status(400).json({ message: 'Weekday price cannot be negative' });
+        }
+        if (weekendPrice !== undefined && Number(weekendPrice) < 0) {
+            return res.status(400).json({ message: 'Weekend price cannot be negative' });
+        }
+
+        if (req.user && req.user.role === 'owner') {
+            if (!propertyId) {
+                return res.status(403).json({ message: 'Access denied: owners cannot create global packages. propertyId is required.' });
+            }
+            const ownerPropertyIds = (req.user.properties || []).map(p => p.toString());
+            if (!ownerPropertyIds.includes(propertyId.toString())) {
+                return res.status(403).json({ message: 'Access denied: you can only create packages for properties you own.' });
+            }
+        }
+
         const newPackage = await Package.create({
             title,
             description,
@@ -92,6 +116,33 @@ const updatePackage = async (req, res) => {
             return res.status(404).json({ message: 'PACKAGE NOT FOUND' });
         }
 
+        if (req.body.maxCapacity !== undefined && (Number(req.body.maxCapacity) <= 0 || isNaN(Number(req.body.maxCapacity)))) {
+            return res.status(400).json({ message: 'Maximum capacity must be greater than 0' });
+        }
+        if (req.body.weekdayPrice !== undefined && Number(req.body.weekdayPrice) < 0) {
+            return res.status(400).json({ message: 'Weekday price cannot be negative' });
+        }
+        if (req.body.weekendPrice !== undefined && Number(req.body.weekendPrice) < 0) {
+            return res.status(400).json({ message: 'Weekend price cannot be negative' });
+        }
+
+        // Multi-tenant authorization: Owners can only modify packages for their own properties
+        if (req.user && req.user.role === 'owner') {
+            if (!existingPackage.property) {
+                return res.status(403).json({ message: 'Access denied: owners cannot modify global packages.' });
+            }
+            const ownerPropertyIds = (req.user.properties || []).map(p => p.toString());
+            if (!ownerPropertyIds.includes(existingPackage.property.toString())) {
+                return res.status(403).json({ message: 'Access denied: you do not own the property for this package.' });
+            }
+            // If changing propertyId, owner must also own the destination property
+            if (req.body.propertyId !== undefined) {
+                if (!req.body.propertyId || !ownerPropertyIds.includes(req.body.propertyId.toString())) {
+                    return res.status(403).json({ message: 'Access denied: target property is not owned by you.' });
+                }
+            }
+        }
+
         // PHASE 2: Allow updating property linkage
         const updateData = { ...req.body };
         if (req.body.propertyId !== undefined) {
@@ -124,6 +175,17 @@ const deletePackage = async (req, res) => {
 
         if (!existingPackage) {
             return res.status(404).json({ message: 'PACKAGE NOT FOUND' });
+        }
+
+        // Multi-tenant authorization: Owners can only delete packages for their own properties
+        if (req.user && req.user.role === 'owner') {
+            if (!existingPackage.property) {
+                return res.status(403).json({ message: 'Access denied: owners cannot delete global packages.' });
+            }
+            const ownerPropertyIds = (req.user.properties || []).map(p => p.toString());
+            if (!ownerPropertyIds.includes(existingPackage.property.toString())) {
+                return res.status(403).json({ message: 'Access denied: you do not own the property for this package.' });
+            }
         }
 
         await existingPackage.deleteOne();

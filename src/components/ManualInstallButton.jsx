@@ -6,6 +6,11 @@ const ManualInstallButton = ({ className = '' }) => {
     const [isInstallable, setIsInstallable] = useState(false);
 
     useEffect(() => {
+        // If it's already installed, don't show the button
+        if (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches) {
+            return;
+        }
+
         const handleBeforeInstallPrompt = (e) => {
             e.preventDefault();
             setDeferredPrompt(e);
@@ -13,11 +18,6 @@ const ManualInstallButton = ({ className = '' }) => {
         };
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-        // If it's already installed, don't show the button
-        if (window.matchMedia('(display-mode: standalone)').matches) {
-            setIsInstallable(false);
-        }
 
         return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     }, []);
