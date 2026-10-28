@@ -39,6 +39,10 @@ const checkCapacityOverlap = async (packageType, checkIn, checkOut, propertyId =
 
         if (pkg && pkg.maxCapacity > 0) {
             maxCapacity = pkg.maxCapacity;
+        } else if (pkg) {
+            // maxCapacity === 0 means "unlimited" in this data model (legacy
+            // packages), not "closed". Preserve that meaning.
+            return true;
         } else {
             // SECURITY: a package we cannot resolve has no known capacity.
             // The previous version returned `true` here, which silently
