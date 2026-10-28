@@ -4,7 +4,7 @@ const User = require('../models/User');
 const Package = require('../models/Package');
 const Review = require('../models/Review');
 const { generateUniqueSlug } = require('../utils/slugify');
-const { escapeRegex, optionalString } = require('../utils/validate');
+const { escapeRegex, optionalString, optionalObjectId, optionalHttpUrl, optionalNumber, isPlainObject } = require('../utils/validate');
 
 // ==========================================
 // OWNER PROJECTION FIELDS
@@ -307,6 +307,7 @@ const createProperty = async (req, res) => {
             checkOutTime,
             rules,
             whatsappNumber,
+            googleMapsLink,
             owner,
             isActive
         } = req.body;
@@ -318,15 +319,36 @@ const createProperty = async (req, res) => {
         if (!type || !['campsite', 'villa'].includes(type)) {
             return res.status(400).json({ message: 'Property type must be "campsite" or "villa"' });
         }
-        if (maxGuests !== undefined && (Number(maxGuests) <= 0 || isNaN(Number(maxGuests)))) {
-            return res.status(400).json({ message: 'Maximum guests must be greater than 0' });
+        if (maxGuests !== undefined && optionalNumber(maxGuests, { min: 1, max: 1000 }) === null) {
+            return res.status(400).json({ message: 'Maximum guests must be a number between 1 and 1000' });
         }
-        if (pricing) {
-            if (pricing.weekdayPrice !== undefined && Number(pricing.weekdayPrice) < 0) {
-                return res.status(400).json({ message: 'Weekday price cannot be negative' });
+        if (pricing !== undefined) {
+            if (!isPlainObject(pricing)) {
+                return res.status(400).json({ message: 'Pricing must be an object' });
             }
-            if (pricing.weekendPrice !== undefined && Number(pricing.weekendPrice) < 0) {
-                return res.status(400).json({ message: 'Weekend price cannot be negative' });
+            if (pricing.weekdayPrice !== undefined && optionalNumber(pricing.weekdayPrice, { min: 0, max: 10000000 }) === null) {
+                return res.status(400).json({ message: 'Weekday price must be a number between 0 and 10000000' });
+            }
+            if (pricing.weekendPrice !== undefined && optionalNumber(pricing.weekendPrice, { min: 0, max: 10000000 }) === null) {
+                return res.status(400).json({ message: 'Weekend price must be a number between 0 and 10000000' });
+            }
+        }
+
+        // ---- VALIDATE OPTIONAL LINKS AND OWNER ----
+        let safeMapsLink = '';
+        if (googleMapsLink !== undefined && googleMapsLink !== '') {
+            const parsedLink = optionalHttpUrl(googleMapsLink, 500);
+            if (parsedLink === null) {
+                return res.status(400).json({ message: 'Google Maps link must be a valid http(s) URL' });
+            }
+            safeMapsLink = parsedLink;
+        }
+
+        let validatedOwner = null;
+        if (owner !== undefined && owner !== null && owner !== '') {
+            validatedOwner = optionalObjectId(owner);
+            if (!validatedOwner) {
+                return res.status(400).json({ message: 'Invalid owner id' });
             }
         }
 
@@ -356,14 +378,15 @@ const createProperty = async (req, res) => {
             checkOutTime: checkOutTime || '11:00 AM',
             rules: rules || [],
             whatsappNumber: whatsappNumber || '',
-            owner: owner || null,
+            googleMapsLink: safeMapsLink,
+            owner: validatedOwner,
             isActive: isActive !== undefined ? isActive : true,
             createdBy: req.user._id
         });
 
         // ---- SYNC OWNER ----
-        if (owner) {
-            await User.findByIdAndUpdate(owner, { $addToSet: { properties: property._id } });
+        if (validatedOwner) {
+            await User.findByIdAndUpdate(validatedOwner, { $addToSet: { properties: property._id } });
         }
 
         res.status(201).json(property);
@@ -441,6 +464,17 @@ const updateProperty = async (req, res) => {
             updatedFields.owner = requestedOwner;
         }
 
+        // ---- VALIDATED EXTERNAL LINK (M-04) ----
+        // Only absolute http(s) URLs are stored, so a `javascript:` value can
+        // never end up in an href on the public property page.
+        if (req.body.googleMapsLink !== undefined) {
+            const parsedLink = optionalHttpUrl(req.body.googleMapsLink, 500);
+            if (parsedLink === null) {
+                return res.status(400).json({ message: 'Google Maps link must be a valid http(s) URL' });
+            }
+            updatedFields.googleMapsLink = parsedLink;
+        }
+
         const oldOwner = property.owner;
 
         // ---- HANDLE SLUG REGENERATION IF NAME CHANGES ----
@@ -451,14 +485,37 @@ const updateProperty = async (req, res) => {
         }
 
         // ---- HANDLE NESTED PRICING UPDATE ----
-        // Merge pricing sub-document rather than replacing it entirely
-        if (req.body.pricing) {
-            updatedFields.pricing = {
-                weekdayPrice: req.body.pricing.weekdayPrice ?? property.pricing.weekdayPrice,
-                weekendPrice: req.body.pricing.weekendPrice ?? property.pricing.weekendPrice,
-                priceDisplay: req.body.pricing.priceDisplay ?? property.pricing.priceDisplay,
-                pricePer: req.body.pricing.pricePer ?? property.pricing.pricePer
-            };
+        // Merge the pricing sub-document rather than replacing it, and reject
+        // non-numeric values instead of letting Mongoose cast them.
+        if (req.body.pricing !== undefined) {
+            const rawPricing = req.body.pricing;
+            if (!isPlainObject(rawPricing)) {
+                return res.status(400).json({ message: 'Pricing must be an object' });
+            }
+
+            const weekdayPrice = rawPricing.weekdayPrice === undefined
+                ? property.pricing.weekdayPrice
+                : optionalNumber(rawPricing.weekdayPrice, { min: 0, max: 10000000 });
+            const weekendPrice = rawPricing.weekendPrice === undefined
+                ? property.pricing.weekendPrice
+                : optionalNumber(rawPricing.weekendPrice, { min: 0, max: 10000000 });
+
+            if (weekdayPrice === null || weekendPrice === null) {
+                return res.status(400).json({ message: 'Prices must be numbers between 0 and 10000000' });
+            }
+
+            const priceDisplay = rawPricing.priceDisplay === undefined
+                ? property.pricing.priceDisplay
+                : optionalString(rawPricing.priceDisplay, 60);
+            const pricePer = rawPricing.pricePer === undefined
+                ? property.pricing.pricePer
+                : optionalString(rawPricing.pricePer, 30);
+
+            if (priceDisplay === null || pricePer === null) {
+                return res.status(400).json({ message: 'Invalid pricing display values' });
+            }
+
+            updatedFields.pricing = { weekdayPrice, weekendPrice, priceDisplay, pricePer };
         }
 
         const updatedProperty = await Property.findByIdAndUpdate(

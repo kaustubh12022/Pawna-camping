@@ -69,23 +69,40 @@ function run() {
     // --------------------------------------------------------------------------------
     console.log('\n--- TASK 1: LEGACY PLAINTEXT PASSWORD FIELD ---');
 
-    const filesWithLegacyField = sourceFiles.filter(file => readFile(file).includes(LEGACY_FIELD));
+    // The legacy field must never be declared as a schema path or written to a
+    // document. It may only remain in defensive code that strips it from
+    // documents hydrated out of an older database.
+    const legacyPathPattern = new RegExp(`^\\s*${LEGACY_FIELD}\\s*:\\s*\\{`, 'm');
+    const legacyWritePattern = new RegExp(`(?:^|[^.\\w])${LEGACY_FIELD}\\s*=(?!=)`);
+
+    const filesDeclaringOrWritingLegacy = sourceFiles.filter((file) => {
+        const source = readFile(file);
+        return legacyPathPattern.test(source) || legacyWritePattern.test(source);
+    });
 
     report(
-        `No source file under backend/ contains the string "${LEGACY_FIELD}"`,
-        filesWithLegacyField.length === 0,
-        filesWithLegacyField.length === 0
+        `No source file declares or writes "${LEGACY_FIELD}"`,
+        filesDeclaringOrWritingLegacy.length === 0,
+        filesDeclaringOrWritingLegacy.length === 0
             ? `Scanned ${sourceFiles.length} files, 0 matches`
-            : `Found in: ${filesWithLegacyField.map(rel).join(', ')}`
+            : `Found in: ${filesDeclaringOrWritingLegacy.map(rel).join(', ')}`
     );
 
-    // The User schema must not declare the legacy field any more
+    // The User schema must not declare the legacy field any more, but it must
+    // defend against old documents that still contain it (Mongoose keeps
+    // unknown database fields on the hydrated document).
     const userModelPath = path.join(BACKEND_ROOT, 'models', 'User.js');
     const userModel = readFile(userModelPath);
     report(
-        'models/User.js does not declare the legacy field',
-        !userModel.includes(LEGACY_FIELD),
+        `models/User.js does not declare "${LEGACY_FIELD}" as a schema path`,
+        !legacyPathPattern.test(userModel),
         'User schema is clean'
+    );
+
+    report(
+        'models/User.js strips the legacy field from serialised documents',
+        userModel.includes(`delete ret.${LEGACY_FIELD}`),
+        'toJSON/toObject transform present'
     );
 
     // The User schema must carry the new "must change password" flag
@@ -126,6 +143,12 @@ function run() {
         'ownerController.js listOwners explicitly excludes the password hash',
         /const listOwners[\s\S]*?\.select\('-password'\)/.test(ownerController),
         "listOwners uses .select('-password')"
+    );
+
+    report(
+        'ownerController.js listOwners deletes the legacy field from the response',
+        ownerController.includes(`delete obj.${LEGACY_FIELD}`),
+        `delete obj.${LEGACY_FIELD}`
     );
 
     report(

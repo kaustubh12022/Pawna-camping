@@ -54,6 +54,22 @@ const isPlainObject = (value) => (
     && !Array.isArray(value)
 );
 
+// Returns a trimmed absolute http(s) URL, or null when the value is missing,
+// malformed, too long, or uses any other scheme. This is what prevents a
+// stored `javascript:` link from executing when rendered as an href.
+const optionalHttpUrl = (value, maxLength = 500) => {
+    const str = optionalString(value, maxLength);
+    if (!str) return str; // '' (explicitly cleared) or null (not a string)
+    let parsed;
+    try {
+        parsed = new URL(str);
+    } catch {
+        return null;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return str;
+};
+
 // Guards a query string before it is handed to a regex. Escapes every
 // regex metacharacter so user input cannot alter the expression.
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -99,6 +115,7 @@ module.exports = {
     optionalInt,
     optionalNumber,
     optionalObjectId,
+    optionalHttpUrl,
     escapeRegex,
     parsePagination,
     validatePassword,

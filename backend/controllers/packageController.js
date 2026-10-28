@@ -1,5 +1,5 @@
 const Package = require('../models/Package');
-const { optionalObjectId } = require('../utils/validate');
+const { optionalObjectId, optionalString, optionalInt, optionalNumber, isPlainString } = require('../utils/validate');
 
 // ==========================================
 // GET ALL PACKAGES (with optional property filter)
@@ -63,14 +63,23 @@ const createPackage = async (req, res) => {
         if (!title || !title.trim()) {
             return res.status(400).json({ message: 'Package title is required' });
         }
-        if (maxCapacity !== undefined && (Number(maxCapacity) <= 0 || isNaN(Number(maxCapacity)))) {
-            return res.status(400).json({ message: 'Maximum capacity must be greater than 0' });
+
+        // maxCapacity === 0 is the legacy "unlimited" marker and is allowed.
+        const parsedMaxCapacity = maxCapacity === undefined
+            ? 10
+            : optionalInt(maxCapacity, { min: 0, max: 1000 });
+
+        if (parsedMaxCapacity === null) {
+            return res.status(400).json({ message: 'Maximum capacity must be a whole number between 0 and 1000' });
         }
-        if (weekdayPrice !== undefined && Number(weekdayPrice) < 0) {
-            return res.status(400).json({ message: 'Weekday price cannot be negative' });
+        if (weekdayPrice !== undefined && optionalNumber(weekdayPrice, { min: 0, max: 10000000 }) === null) {
+            return res.status(400).json({ message: 'Weekday price must be a number between 0 and 10000000' });
         }
-        if (weekendPrice !== undefined && Number(weekendPrice) < 0) {
-            return res.status(400).json({ message: 'Weekend price cannot be negative' });
+        if (weekendPrice !== undefined && optionalNumber(weekendPrice, { min: 0, max: 10000000 }) === null) {
+            return res.status(400).json({ message: 'Weekend price must be a number between 0 and 10000000' });
+        }
+        if (propertyId !== undefined && propertyId !== null && propertyId !== '' && !optionalObjectId(propertyId)) {
+            return res.status(400).json({ message: 'Invalid property id' });
         }
 
         if (req.user && req.user.role === 'owner') {
@@ -88,9 +97,9 @@ const createPackage = async (req, res) => {
             description,
             features,
             price,
-            weekdayPrice: weekdayPrice || 0,
-            weekendPrice: weekendPrice || 0,
-            maxCapacity: maxCapacity || 10,
+            weekdayPrice: weekdayPrice === undefined ? 0 : Number(weekdayPrice),
+            weekendPrice: weekendPrice === undefined ? 0 : Number(weekendPrice),
+            maxCapacity: parsedMaxCapacity,
             image,
             property: propertyId || null  // PHASE 2: Link to property if provided
         });
@@ -119,14 +128,30 @@ const updatePackage = async (req, res) => {
             return res.status(404).json({ message: 'PACKAGE NOT FOUND' });
         }
 
-        if (req.body.maxCapacity !== undefined && (Number(req.body.maxCapacity) <= 0 || isNaN(Number(req.body.maxCapacity)))) {
-            return res.status(400).json({ message: 'Maximum capacity must be greater than 0' });
+        // ---- VALIDATE NUMERIC FIELDS ----
+        const numericChecks = [
+            ['weekdayPrice', 'Weekday price'],
+            ['weekendPrice', 'Weekend price']
+        ];
+        for (const [field, label] of numericChecks) {
+            if (req.body[field] !== undefined && optionalNumber(req.body[field], { min: 0, max: 10000000 }) === null) {
+                return res.status(400).json({ message: `${label} must be a number between 0 and 10000000` });
+            }
         }
-        if (req.body.weekdayPrice !== undefined && Number(req.body.weekdayPrice) < 0) {
-            return res.status(400).json({ message: 'Weekday price cannot be negative' });
+        if (req.body.maxCapacity !== undefined && optionalInt(req.body.maxCapacity, { min: 0, max: 1000 }) === null) {
+            return res.status(400).json({ message: 'Maximum capacity must be a whole number between 0 and 1000' });
         }
-        if (req.body.weekendPrice !== undefined && Number(req.body.weekendPrice) < 0) {
-            return res.status(400).json({ message: 'Weekend price cannot be negative' });
+
+        // ---- VALIDATE PROPERTY LINK ----
+        let requestedPropertyId;
+        if (req.body.propertyId !== undefined) {
+            if (req.body.propertyId === null || req.body.propertyId === '') {
+                requestedPropertyId = null;
+            } else if (optionalObjectId(req.body.propertyId)) {
+                requestedPropertyId = req.body.propertyId;
+            } else {
+                return res.status(400).json({ message: 'Invalid property id' });
+            }
         }
 
         // Multi-tenant authorization: Owners can only modify packages for their own properties
@@ -139,18 +164,60 @@ const updatePackage = async (req, res) => {
                 return res.status(403).json({ message: 'Access denied: you do not own the property for this package.' });
             }
             // If changing propertyId, owner must also own the destination property
-            if (req.body.propertyId !== undefined) {
-                if (!req.body.propertyId || !ownerPropertyIds.includes(req.body.propertyId.toString())) {
-                    return res.status(403).json({ message: 'Access denied: target property is not owned by you.' });
-                }
+            if (requestedPropertyId !== undefined && (requestedPropertyId === null || !ownerPropertyIds.includes(requestedPropertyId))) {
+                return res.status(403).json({ message: 'Access denied: target property is not owned by you.' });
             }
         }
 
-        // PHASE 2: Allow updating property linkage
-        const updateData = { ...req.body };
-        if (req.body.propertyId !== undefined) {
-            updateData.property = req.body.propertyId || null;
-            delete updateData.propertyId; // Clean up alias
+        // ---- ALLOW-LISTED UPDATE (M-08) ----
+        // The previous version spread `req.body` into findByIdAndUpdate, which
+        // let an owner set `property` or `createdBy` directly and bypass the
+        // propertyId checks above. Only these fields may change.
+        const ALLOWED_PACKAGE_FIELDS = [
+            'title', 'description', 'features', 'price', 'image',
+            'weekdayPrice', 'weekendPrice', 'maxCapacity'
+        ];
+
+        const updateData = {};
+        for (const field of ALLOWED_PACKAGE_FIELDS) {
+            if (req.body[field] !== undefined) updateData[field] = req.body[field];
+        }
+
+        // Normalise the free-text and array fields.
+        if (updateData.title !== undefined) {
+            const title = optionalString(updateData.title, 120);
+            if (!title) return res.status(400).json({ message: 'Package title cannot be empty' });
+            updateData.title = title;
+        }
+        if (updateData.description !== undefined) {
+            const description = optionalString(updateData.description, 2000);
+            if (description === null) return res.status(400).json({ message: 'Invalid description' });
+            updateData.description = description;
+        }
+        if (updateData.price !== undefined) {
+            const price = optionalString(updateData.price, 60);
+            if (price === null) return res.status(400).json({ message: 'Invalid price display value' });
+            updateData.price = price;
+        }
+        if (updateData.image !== undefined) {
+            const image = optionalString(updateData.image, 1000);
+            if (image === null) return res.status(400).json({ message: 'Invalid image URL' });
+            updateData.image = image;
+        }
+        if (updateData.features !== undefined) {
+            if (!Array.isArray(updateData.features)) {
+                return res.status(400).json({ message: 'Features must be an array of strings' });
+            }
+            updateData.features = updateData.features
+                .filter(isPlainString)
+                .map((feature) => feature.trim())
+                .filter(Boolean)
+                .slice(0, 30);
+        }
+
+        // PHASE 2: Allow updating property linkage (validated above).
+        if (requestedPropertyId !== undefined) {
+            updateData.property = requestedPropertyId;
         }
 
         const updatedPackage = await Package.findByIdAndUpdate(

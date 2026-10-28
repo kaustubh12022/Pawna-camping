@@ -255,6 +255,30 @@ test('a missing tokenVersion is normalised to 0', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 7. ALLOW-LISTS
+// ---------------------------------------------------------------------------
+const fs = require('fs');
+const { optionalHttpUrl } = require('../utils/validate');
+
+console.log('\n--- Allow-lists ---');
+
+test('accepts only absolute http(s) URLs for stored links', () => {
+    assert.strictEqual(optionalHttpUrl('https://maps.app.goo.gl/abc'), 'https://maps.app.goo.gl/abc');
+    assert.strictEqual(optionalHttpUrl('http://example.com/x'), 'http://example.com/x');
+    assert.strictEqual(optionalHttpUrl('javascript:alert(1)'), null);
+    assert.strictEqual(optionalHttpUrl('data:text/html,<script>alert(1)</script>'), null);
+    assert.strictEqual(optionalHttpUrl('/relative/path'), null);
+    assert.strictEqual(optionalHttpUrl({ href: 'https://example.com' }), null);
+    assert.strictEqual(optionalHttpUrl(''), '');
+});
+
+test('package updates never spread the raw request body', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'packageController.js'), 'utf8');
+    assert.ok(!src.includes('{ ...req.body }'), 'mass assignment regression in packageController');
+    assert.ok(src.includes('ALLOWED_PACKAGE_FIELDS'), 'package update allow-list missing');
+});
+
+// ---------------------------------------------------------------------------
 // SUMMARY
 // ---------------------------------------------------------------------------
 console.log('\n' + '='.repeat(72));
