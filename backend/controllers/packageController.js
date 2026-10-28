@@ -220,6 +220,13 @@ const updatePackage = async (req, res) => {
             updateData.property = requestedPropertyId;
         }
 
+        // An empty update (for example, a body that only contains fields the
+        // caller is not allowed to change) is a no-op, not an error.
+        if (Object.keys(updateData).length === 0) {
+            const unchanged = await Package.findById(req.params.id).populate('property', 'name type slug');
+            return res.status(200).json(unchanged);
+        }
+
         const updatedPackage = await Package.findByIdAndUpdate(
             req.params.id,
             updateData,

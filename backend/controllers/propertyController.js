@@ -518,6 +518,13 @@ const updateProperty = async (req, res) => {
             updatedFields.pricing = { weekdayPrice, weekendPrice, priceDisplay, pricePer };
         }
 
+        // An empty update (for example, a body that only contains fields the
+        // caller may not change) is a no-op, not an error.
+        if (Object.keys(updatedFields).length === 0) {
+            const unchanged = await Property.findById(req.params.id).populate('owner', OWNER_FIELDS_MANAGER);
+            return res.status(200).json(unchanged);
+        }
+
         const updatedProperty = await Property.findByIdAndUpdate(
             req.params.id,
             updatedFields,
