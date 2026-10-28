@@ -188,7 +188,52 @@ test('duplicate key becomes a 409', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. JWT TOKEN VERSION BINDING
+// 5. USER SERIALISATION (legacy plaintext field)
+// ---------------------------------------------------------------------------
+const mongoose = require('mongoose');
+const User = require('../models/User');
+
+console.log('\n--- User serialisation ---');
+
+test('strips password, legacy plaintext and auth bookkeeping from JSON', () => {
+    const doc = User.hydrate({
+        _id: new mongoose.Types.ObjectId(),
+        name: 'Owner',
+        email: 'owner@example.com',
+        role: 'owner',
+        password: 'bcrypt-hash',
+        plainPassword: 'legacy-secret',
+        tokenVersion: 4,
+        failedLoginAttempts: 2,
+        lockUntil: new Date()
+    });
+
+    const json = doc.toJSON();
+    assert.strictEqual(json.plainPassword, undefined);
+    assert.strictEqual(json.password, undefined);
+    assert.strictEqual(json.tokenVersion, undefined);
+    assert.strictEqual(json.failedLoginAttempts, undefined);
+    assert.strictEqual(json.lockUntil, undefined);
+    assert.strictEqual(json.name, 'Owner');
+});
+
+test('strips the same fields through toObject (used by listOwners)', () => {
+    const doc = User.hydrate({
+        _id: new mongoose.Types.ObjectId(),
+        name: 'Owner',
+        email: 'owner@example.com',
+        role: 'owner',
+        password: 'bcrypt-hash',
+        plainPassword: 'legacy-secret'
+    });
+
+    const obj = doc.toObject();
+    assert.strictEqual(obj.plainPassword, undefined);
+    assert.strictEqual(obj.password, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// 6. JWT TOKEN VERSION BINDING
 // ---------------------------------------------------------------------------
 const jwt = require('jsonwebtoken');
 const { generateToken } = require('../controllers/authController');

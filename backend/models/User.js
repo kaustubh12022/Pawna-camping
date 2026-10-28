@@ -119,4 +119,29 @@ userSchema.methods.isLocked = function () {
     return Boolean(this.lockUntil && this.lockUntil.getTime() > Date.now());
 };
 
+// ==========================================
+// RESPONSE SANITISATION
+// ==========================================
+// Mongoose keeps fields that exist in the database but are no longer declared
+// in the schema (verified against mongoose 9: `User.hydrate({ plainPassword })`
+// still exposes the key through toObject/toJSON). The legacy `plainPassword`
+// field therefore survives in old documents even after it was removed from
+// this schema, and would be serialised straight to the client.
+//
+// This transform is the last line of defence: no route can leak a password
+// hash, the legacy plaintext field, or authentication bookkeeping, even if a
+// future controller forgets an explicit projection.
+const stripSensitiveUserFields = (doc, ret) => {
+    delete ret.password;
+    delete ret.plainPassword;
+    delete ret.tokenVersion;
+    delete ret.failedLoginAttempts;
+    delete ret.lockUntil;
+    delete ret.__v;
+    return ret;
+};
+
+userSchema.set('toJSON', { transform: stripSensitiveUserFields, virtuals: false });
+userSchema.set('toObject', { transform: stripSensitiveUserFields, virtuals: false });
+
 module.exports = mongoose.model('User', userSchema);

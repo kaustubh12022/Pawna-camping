@@ -162,10 +162,13 @@ const listOwners = async (req, res) => {
             .populate('properties', 'name type slug isActive location')
             .sort({ createdAt: -1 });
 
-        // Strip password hash before sending to frontend
+        // Strip password hash and the legacy plaintext field before sending
+        // to the frontend. Mongoose 9 keeps unknown database fields on the
+        // hydrated document, so omitting the schema path is not enough.
         const safeOwners = owners.map(owner => {
             const obj = owner.toObject();
             delete obj.password;
+            delete obj.plainPassword;
             return obj;
         });
 
