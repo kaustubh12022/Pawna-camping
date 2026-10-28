@@ -4,7 +4,9 @@ const mongoose = require('mongoose');
 const siteSettingsSchema = new mongoose.Schema({
     whatsappNumber: {
         type: String,
-        default: '919975526627'
+        // No personal number is baked into the source. The manager sets the
+        // business WhatsApp number from the Settings page.
+        default: ''
     }
 }, {
     timestamps: true

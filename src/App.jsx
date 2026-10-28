@@ -40,6 +40,7 @@ const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'));
 
 const OwnerLogin = React.lazy(() => import('./pages/OwnerLogin'));
 const OwnerDashboard = React.lazy(() => import('./pages/OwnerDashboard'));
+const ChangePassword = React.lazy(() => import('./pages/ChangePassword'));
 
 const PUBLIC_ROUTE_PREFIXES = ['/', '/campsite/', '/villa/', '/booking', '/privacy', '/terms', '/refund'];
 
@@ -146,6 +147,9 @@ function App() {
 
                 {/* MANAGER LOGIN (standalone, no sidebar) */}
                 <Route path="/manager/login" element={<ManagerLogin />} />
+
+                {/* FORCED PASSWORD CHANGE (any role, token required) */}
+                <Route path="/change-password" element={<ChangePassword />} />
 
                 {/* PROTECTED MANAGER PORTAL (with sidebar layout) */}
                 <Route path="/manager" element={<ProtectedRoute allowedRole="manager"><ManagerLayout><DashboardHome /></ManagerLayout></ProtectedRoute>} />

@@ -34,7 +34,8 @@ const getBlockedDates = async (req, res) => {
         const blockedDates = await BlockedDate.find(query);
         res.status(200).json(blockedDates);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -67,7 +68,8 @@ const createBlockedDate = async (req, res) => {
 
         res.status(201).json(blockedDate);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -92,7 +94,8 @@ const deleteBlockedDate = async (req, res) => {
         await blockedDate.deleteOne();
         res.status(200).json({ message: 'Blocked date removed' });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 

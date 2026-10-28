@@ -8,7 +8,8 @@ const getSettings = async (req, res) => {
         const settings = await SiteSettings.getSingleton();
         res.status(200).json(settings);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -29,7 +30,8 @@ const updateSettings = async (req, res) => {
 
         res.status(200).json(settings);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 

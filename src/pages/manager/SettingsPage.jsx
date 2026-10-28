@@ -12,6 +12,7 @@ const SettingsPage = () => {
     const [whatsappNumber, setWhatsappNumber] = useState('');
     const [whatsappLoading, setWhatsappLoading] = useState(false);
     const [managerPassword, setManagerPassword] = useState('');
+    const [currentPassword, setCurrentPassword] = useState('');
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [success, setSuccess] = useState('');
 
@@ -65,13 +66,15 @@ const SettingsPage = () => {
     const handlePasswordUpdate = async (e) => {
         e.preventDefault();
         if (!token()) return navigate('/manager/login');
-        if (managerPassword.length < 6) return toast.warning('Password must be at least 6 characters');
+        if (managerPassword.length < 8) return toast.warning('Password must be at least 8 characters');
+        if (!currentPassword) return toast.warning('Enter your current password');
+        if (managerPassword === currentPassword) return toast.warning('New password must be different');
         setPasswordLoading(true);
         try {
-            const res = await fetch(`${API}/api/auth/update-password`, {
+            const res = await fetch(`${API}/api/auth/change-password`, {
                 method: 'PUT',
                 headers: headers(),
-                body: JSON.stringify({ newPassword: managerPassword })
+                body: JSON.stringify({ currentPassword, newPassword: managerPassword })
             });
 
             if (res.status === 401) {
@@ -79,15 +82,21 @@ const SettingsPage = () => {
                 return navigate('/manager/login');
             }
 
-            if (res.ok) {
-                setManagerPassword('');
-                setSuccess('Password updated successfully!');
-                toast.success('Password updated successfully!');
-                setTimeout(() => setSuccess(''), 3000);
-            } else {
-                const d = await res.json().catch(() => ({}));
+            const d = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
                 throw new Error(d.message || 'Failed to update password');
             }
+
+            // The server revokes every existing session and returns a new
+            // token so this tab stays signed in.
+            if (d.token) localStorage.setItem('managerToken', d.token);
+
+            setManagerPassword('');
+            setCurrentPassword('');
+            setSuccess('Password updated. Other devices have been signed out.');
+            toast.success('Password updated successfully!');
+            setTimeout(() => setSuccess(''), 4000);
         } catch (err) {
             toast.error(err.message);
         } finally {
@@ -150,9 +159,15 @@ const SettingsPage = () => {
                 </div>
                 <form onSubmit={handlePasswordUpdate} className="space-y-4">
                     <div>
+                        <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1.5">Current Password</label>
+                        <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
+                            placeholder="Required to confirm the change" autoComplete="current-password" required
+                            className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                    </div>
+                    <div>
                         <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1.5">New Password</label>
                         <input type="password" value={managerPassword} onChange={e => setManagerPassword(e.target.value)}
-                            placeholder="Min 6 characters" minLength={6} required
+                            placeholder="Min 8 characters, with a letter and a number" minLength={8} autoComplete="new-password" required
                             className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                     </div>
                     <button type="submit" disabled={passwordLoading}

@@ -69,7 +69,8 @@ const getCurrentPromotion = (req, res) => {
             bannerMessage
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 

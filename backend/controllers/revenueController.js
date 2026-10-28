@@ -108,7 +108,8 @@ const createRevenue = async (req, res) => {
 
         res.status(201).json(populated);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -156,7 +157,8 @@ const getAllRevenue = async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -177,7 +179,8 @@ const getRevenueById = async (req, res) => {
 
         res.status(200).json(entry);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -219,7 +222,8 @@ const updateRevenue = async (req, res) => {
 
         res.status(200).json({ message: 'Revenue entry updated', entry: updated });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -241,7 +245,8 @@ const deleteRevenue = async (req, res) => {
             id: req.params.id
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -297,7 +302,8 @@ const getRevenueSummary = async (req, res) => {
             count
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -359,7 +365,8 @@ const getRevenueTrends = async (req, res) => {
 
         res.status(200).json(formatted);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -413,7 +420,8 @@ const getRevenueByProperty = async (req, res) => {
 
         res.status(200).json(result);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -521,7 +529,8 @@ const getRevenueOverview = async (req, res) => {
             recentEntries
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 

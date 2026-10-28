@@ -37,7 +37,13 @@ const OwnerLogin = () => {
 
             // SAVE TOKEN AND NAVIGATE TO DASHBOARD
             localStorage.setItem('ownerToken', data.token);
-            navigate('/owner');
+
+            // A manager-issued temporary password must be replaced first.
+            if (data.mustChangePassword) {
+                navigate('/change-password');
+            } else {
+                navigate('/owner');
+            }
 
         } catch (err) {
             setError(err.message);

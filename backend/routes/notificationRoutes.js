@@ -18,7 +18,8 @@ router.post('/subscribe', protect, async (req, res) => {
         res.status(201).json({ message: 'Subscription saved successfully.' });
     } catch (error) {
         console.error('Error saving subscription:', error);
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 });
 
@@ -32,7 +33,8 @@ router.put('/seen-bookings', protect, async (req, res) => {
         });
         res.status(200).json({ message: 'Updated last seen timestamp.' });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 });
 

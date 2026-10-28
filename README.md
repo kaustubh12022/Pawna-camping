@@ -179,16 +179,42 @@ Open your browser and visit: **`http://localhost:5173`** 🎉
 
 ---
 
-## 🔐 Default Credentials (Local Development)
+## 🔐 Creating the First Manager Account
 
-When the backend starts up for the first time with initial users, accounts use the following default access:
+This repository **does not ship with any default credentials**. Publishing a
+default password is equivalent to publishing an admin login, so the first
+manager account is created explicitly, once:
 
-| Role | Route | Username / Email | Password |
-| :--- | :--- | :--- | :--- |
-| **Manager** | `/manager/login` | `manager` / `admin` | `kkishero` |
-| **Owner** | `/owner/login` | Assigned owner email | `kkishero` |
+```bash
+cd backend
+node scripts/create-manager.js you@example.com 'a-long-random-passphrase-1' "Your Name"
+```
 
-*(Note: In production, change all passwords via the Manager Settings page).*
+Other operational scripts:
+
+```bash
+# Invalidate every issued JWT immediately (after any suspected token leak)
+node scripts/revoke-all-sessions.js
+
+# Remove the legacy plaintext password field from older documents
+node scripts/purge-plaintext-passwords.js
+```
+
+Requirements enforced by the API:
+
+* at least 8 characters, containing a letter and a number;
+* never equal to the account email;
+* accounts created through `POST /api/auth/register` or `POST /api/owners` are
+  flagged `mustChangePassword`, so the first sign-in is forced through
+  `/change-password` before anything else is reachable.
+
+Owners never choose a password from a manager screen: the server generates a
+one-time temporary password, shows it once, and stores only its bcrypt hash.
+Owners must replace it at first sign-in, and every reset revokes all of that
+account's existing sessions.
+
+> Never commit real credentials, `.env` files, or seed passwords. If a
+> password has ever been committed, treat it as public and rotate it.
 
 ---
 

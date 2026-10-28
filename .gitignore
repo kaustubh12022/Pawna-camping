@@ -31,6 +31,8 @@ dist-ssr
 
 # Dev Scripts
 scripts/
+# ...but the backend maintenance scripts (e.g. one-off DB migrations) are tracked
+!backend/scripts/
 
 # Agent scratch directory
 .agents/

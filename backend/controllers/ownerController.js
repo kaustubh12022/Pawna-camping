@@ -1,5 +1,24 @@
+const crypto = require('crypto');
 const User = require('../models/User');
 const Property = require('../models/Property');
+const { audit } = require('../utils/audit');
+const { validatePassword, optionalString, optionalObjectId } = require('../utils/validate');
+
+// ==========================================
+// HELPER: VALIDATE AN ARRAY OF PROPERTY IDS
+// ==========================================
+// Rejects anything that is not a plain ObjectId string. Without this, an
+// object such as { "$ne": null } would be cast by Mongoose and produce a 500.
+const validatePropertyIdList = (propertyIds) => {
+    if (!Array.isArray(propertyIds)) return null;
+    const cleaned = [];
+    for (const id of propertyIds.slice(0, 100)) {
+        const valid = optionalObjectId(id);
+        if (!valid) return null;
+        if (!cleaned.includes(valid)) cleaned.push(valid);
+    }
+    return cleaned;
+};
 
 // ==========================================
 // PHASE 3: OWNER MANAGEMENT CONTROLLER
@@ -8,50 +27,95 @@ const Property = require('../models/Property');
 // Owners are regular User documents with role='owner'.
 // ==========================================
 
+// ==========================================
+// HELPER: GENERATE A ONE-TIME TEMPORARY PASSWORD
+// ==========================================
+// Only the bcrypt hash of the generated value is ever persisted.
+// The plaintext is returned to the manager exactly once, in the response of
+// the create/reset call that produced it — never in the owner list endpoint.
+const generateTemporaryPassword = () => {
+    // 12 random bytes = 96 bits of entropy, rendered as 24 hex characters
+    return `Pawna-${crypto.randomBytes(12).toString('hex')}`;
+};
+
+// ==========================================
+// HELPER: BUILD THE ONE-TIME PASSWORD PAYLOAD
+// ==========================================
+// `temporaryPassword` is present ONLY when the server generated the password.
+// The notice makes it explicit that the value is shown a single time.
+const buildTemporaryPasswordPayload = (temporaryPassword) => ({
+    temporaryPassword,
+    temporaryPasswordNotice: 'One-time temporary password — shown only once. Share it with the owner securely; the owner must change it after the first login.'
+});
+
 
 // @desc    CREATE A NEW OWNER ACCOUNT
 // @route   POST /api/owners
 // @access  Manager only
 const createOwner = async (req, res) => {
     try {
-        const { name, email, password, phone, propertyIds } = req.body;
+        const name = optionalString(req.body?.name, 120);
+        const email = optionalString(req.body?.email, 254);
+        const password = req.body?.password;
+        const phone = optionalString(req.body?.phone, 30);
+        const { propertyIds } = req.body;
 
         // ---- VALIDATE REQUIRED FIELDS ----
-        if (!name || !name.trim()) {
+        if (!name) {
             return res.status(400).json({ message: 'Owner name is required' });
         }
-        if (!email || !email.trim()) {
+        if (!email) {
             return res.status(400).json({ message: 'Owner email is required' });
         }
-        if (!password || password.length < 6) {
-            return res.status(400).json({ message: 'Password must be at least 6 characters' });
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ message: 'Please provide a valid email address' });
+        }
+        // The password is OPTIONAL. When the manager does not supply one the
+        // server generates a secure one-time temporary password instead.
+        if (password !== undefined && password !== null && password !== '') {
+            const passwordCheck = validatePassword(password, { email });
+            if (!passwordCheck.ok) {
+                return res.status(400).json({ message: passwordCheck.message });
+            }
         }
 
         // ---- CHECK FOR DUPLICATE EMAIL ----
         const existingUser = await User.findOne({ email: email.trim().toLowerCase() });
         if (existingUser) {
-            return res.status(400).json({ message: 'A user with this email already exists' });
+            return res.status(409).json({ message: 'A user with this email already exists' });
         }
 
         // ---- VALIDATE PROPERTY IDs (if provided) ----
         let validatedPropertyIds = [];
-        if (propertyIds && Array.isArray(propertyIds) && propertyIds.length > 0) {
-            const foundProperties = await Property.find({ _id: { $in: propertyIds } }).select('_id name');
-            if (foundProperties.length !== propertyIds.length) {
-                return res.status(400).json({ message: 'One or more property IDs are invalid' });
+        if (propertyIds !== undefined && propertyIds !== null) {
+            const cleaned = validatePropertyIdList(propertyIds);
+            if (!cleaned) {
+                return res.status(400).json({ message: 'propertyIds must be an array of valid property IDs' });
             }
-            validatedPropertyIds = foundProperties.map(p => p._id);
+            if (cleaned.length > 0) {
+                const foundProperties = await Property.find({ _id: { $in: cleaned } }).select('_id name');
+                if (foundProperties.length !== cleaned.length) {
+                    return res.status(400).json({ message: 'One or more property IDs are invalid' });
+                }
+                validatedPropertyIds = foundProperties.map(p => p._id);
+            }
         }
+
+        // ---- PASSWORD: MANAGER-SUPPLIED OR SERVER-GENERATED TEMPORARY ----
+        // Only the bcrypt hash is persisted. When the server generates the
+        // password, the plaintext is returned once in this response only.
+        const isTemporaryPassword = !password;
+        const initialPassword = isTemporaryPassword ? generateTemporaryPassword() : password;
 
         // ---- CREATE OWNER ----
         const owner = await User.create({
             name: name.trim(),
             email: email.trim().toLowerCase(),
-            password,           // Hashed by pre-save hook in User model
-            plainPassword: password, // Store plain password for manager reference
+            password: initialPassword, // Hashed by pre-save hook in User model
             role: 'owner',
             phone: phone || '',
-            properties: validatedPropertyIds
+            properties: validatedPropertyIds,
+            mustChangePassword: true // Owner must replace the password after first login
         });
 
         // ---- SYNC PROPERTY DOCUMENTS ----
@@ -59,7 +123,13 @@ const createOwner = async (req, res) => {
             await Property.updateMany({ _id: { $in: validatedPropertyIds } }, { owner: owner._id });
         }
 
-        // ---- RETURN SAFE RESPONSE (no password) ----
+        audit(req, 'user.created', {
+            targetId: owner._id,
+            targetType: 'User',
+            meta: { role: 'owner', temporaryPassword: isTemporaryPassword }
+        });
+
+        // ---- RETURN SAFE RESPONSE (no password, no password hash) ----
         res.status(201).json({
             _id: owner._id,
             name: owner.name,
@@ -67,10 +137,15 @@ const createOwner = async (req, res) => {
             role: owner.role,
             phone: owner.phone,
             properties: owner.properties,
-            createdAt: owner.createdAt
+            mustChangePassword: true,
+            createdAt: owner.createdAt,
+            ...(isTemporaryPassword
+                ? buildTemporaryPasswordPayload(initialPassword)
+                : { passwordNotice: 'The account was created with the password you supplied. The owner must change it after the first login.' })
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -78,10 +153,12 @@ const createOwner = async (req, res) => {
 // @desc    LIST ALL OWNERS (with their assigned properties populated)
 // @route   GET /api/owners
 // @access  Manager only
+// NOTE: This endpoint NEVER returns a password (plaintext or hash).
+//       A one-time temporary password is issued by the create/reset endpoints.
 const listOwners = async (req, res) => {
     try {
         const owners = await User.find({ role: 'owner' })
-            .select('+plainPassword')
+            .select('-password')
             .populate('properties', 'name type slug isActive location')
             .sort({ createdAt: -1 });
 
@@ -94,7 +171,8 @@ const listOwners = async (req, res) => {
 
         res.status(200).json(safeOwners);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -104,8 +182,13 @@ const listOwners = async (req, res) => {
 // @access  Manager only
 const getOwnerById = async (req, res) => {
     try {
-        const owner = await User.findOne({ _id: req.params.id, role: 'owner' })
-            .select('-password +plainPassword')
+        const ownerId = optionalObjectId(req.params.id);
+        if (!ownerId) {
+            return res.status(400).json({ message: 'Invalid owner id' });
+        }
+
+        const owner = await User.findOne({ _id: ownerId, role: 'owner' })
+            .select('-password')
             .populate('properties', 'name type slug isActive location pricing coverImage');
 
         if (!owner) {
@@ -114,7 +197,8 @@ const getOwnerById = async (req, res) => {
 
         res.status(200).json(owner);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -125,23 +209,29 @@ const getOwnerById = async (req, res) => {
 // Body: { propertyIds: ['id1', 'id2', ...] }  — replaces current assignments
 const assignProperties = async (req, res) => {
     try {
+        const ownerId = optionalObjectId(req.params.id);
+        if (!ownerId) {
+            return res.status(400).json({ message: 'Invalid owner id' });
+        }
+
         const { propertyIds } = req.body;
 
-        if (!Array.isArray(propertyIds)) {
-            return res.status(400).json({ message: 'propertyIds must be an array' });
+        const cleaned = validatePropertyIdList(propertyIds);
+        if (!cleaned) {
+            return res.status(400).json({ message: 'propertyIds must be an array of valid property IDs' });
         }
 
         // ---- FIND THE OWNER ----
-        const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
+        const owner = await User.findOne({ _id: ownerId, role: 'owner' });
         if (!owner) {
             return res.status(404).json({ message: 'Owner not found' });
         }
 
         // ---- VALIDATE ALL PROPERTY IDs ----
         let validatedPropertyIds = [];
-        if (propertyIds.length > 0) {
-            const foundProperties = await Property.find({ _id: { $in: propertyIds } }).select('_id name');
-            if (foundProperties.length !== propertyIds.length) {
+        if (cleaned.length > 0) {
+            const foundProperties = await Property.find({ _id: { $in: cleaned } }).select('_id name');
+            if (foundProperties.length !== cleaned.length) {
                 return res.status(400).json({ message: 'One or more property IDs are invalid' });
             }
             validatedPropertyIds = foundProperties.map(p => p._id);
@@ -169,7 +259,8 @@ const assignProperties = async (req, res) => {
             owner: updated
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -179,24 +270,35 @@ const assignProperties = async (req, res) => {
 // @access  Manager only
 const updateOwner = async (req, res) => {
     try {
-        const { name, phone, email } = req.body;
+        const ownerId = optionalObjectId(req.params.id);
+        if (!ownerId) {
+            return res.status(400).json({ message: 'Invalid owner id' });
+        }
 
-        const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
+        const name = optionalString(req.body?.name, 120);
+        const phone = optionalString(req.body?.phone, 30);
+        const email = optionalString(req.body?.email, 254);
+
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ message: 'Please provide a valid email address' });
+        }
+
+        const owner = await User.findOne({ _id: ownerId, role: 'owner' });
         if (!owner) {
             return res.status(404).json({ message: 'Owner not found' });
         }
 
         // ---- CHECK EMAIL UNIQUENESS (if being changed) ----
-        if (email && email.trim().toLowerCase() !== owner.email) {
-            const emailExists = await User.findOne({ email: email.trim().toLowerCase(), _id: { $ne: owner._id } });
+        if (email && email.toLowerCase() !== owner.email) {
+            const emailExists = await User.findOne({ email: email.toLowerCase(), _id: { $ne: owner._id } });
             if (emailExists) {
                 return res.status(400).json({ message: 'Email is already in use by another user' });
             }
-            owner.email = email.trim().toLowerCase();
+            owner.email = email.toLowerCase();
         }
 
-        if (name && name.trim()) owner.name = name.trim();
-        if (phone !== undefined) owner.phone = phone;
+        if (name) owner.name = name;
+        if (phone !== null) owner.phone = phone;
 
         await owner.save();
 
@@ -206,7 +308,8 @@ const updateOwner = async (req, res) => {
 
         res.status(200).json({ message: 'Owner updated successfully', owner: updated });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -216,7 +319,12 @@ const updateOwner = async (req, res) => {
 // @access  Manager only
 const deleteOwner = async (req, res) => {
     try {
-        const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
+        const ownerId = optionalObjectId(req.params.id);
+        if (!ownerId) {
+            return res.status(400).json({ message: 'Invalid owner id' });
+        }
+
+        const owner = await User.findOne({ _id: ownerId, role: 'owner' });
         if (!owner) {
             return res.status(404).json({ message: 'Owner not found' });
         }
@@ -226,43 +334,98 @@ const deleteOwner = async (req, res) => {
         // ---- SYNC PROPERTY DOCUMENTS ----
         await Property.updateMany({ owner: owner._id }, { owner: null });
 
+        audit(req, 'user.deleted', {
+            targetId: owner._id,
+            targetType: 'User',
+            meta: { role: 'owner' }
+        });
+
         res.status(200).json({
             message: `Owner "${owner.name}" (${owner.email}) deleted successfully`,
             id: req.params.id
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
 
 // @desc    RESET PASSWORD FOR A SPECIFIC USER (by userId)
 // @route   PUT /api/owners/:id/reset-password
-// @access  Manager only
-// Replaces the old per-role updatePassword with a per-user implementation
+// @access  Manager only — requires step-up authentication
+// ---------------------------------------------------------------
+// SECURITY MODEL
+//  * The caller must re-enter THEIR OWN password in `currentPassword`.
+//    A stolen manager token is therefore not enough to take over an account.
+//  * The new password is ALWAYS generated server-side. The old version let
+//    the caller choose the password, so an attacker with a token could set a
+//    value they knew and sign in as the owner.
+//  * Only the bcrypt hash is stored. The plaintext is returned exactly once,
+//    in this response, and is never persisted or listed anywhere.
+//  * The target's tokenVersion is bumped, so every existing session dies.
+// ---------------------------------------------------------------
 const resetOwnerPassword = async (req, res) => {
     try {
-        const { newPassword } = req.body;
-
-        if (!newPassword || newPassword.length < 6) {
-            return res.status(400).json({ message: 'New password must be at least 6 characters' });
+        const targetId = optionalObjectId(req.params.id);
+        if (!targetId) {
+            return res.status(400).json({ message: 'Invalid user id' });
         }
 
-        // Works for any user (owner or manager) — manager can reset any user's password
-        const user = await User.findById(req.params.id);
+        const currentPassword = req.body?.currentPassword;
+
+        if (typeof currentPassword !== 'string' || currentPassword.length === 0) {
+            return res.status(400).json({
+                message: 'Your current password is required to reset another account'
+            });
+        }
+
+        // ---- STEP-UP: VERIFY THE CALLER ----
+        const caller = await User.findById(req.user._id).select('+password');
+        if (!caller) {
+            return res.status(401).json({ message: 'Not authorised' });
+        }
+        const callerMatches = await caller.matchPassword(currentPassword);
+        if (!callerMatches) {
+            audit(req, 'password.reset.failed', {
+                targetId: req.params.id,
+                targetType: 'User',
+                success: false,
+                meta: { reason: 'step_up_failed' }
+            });
+            return res.status(401).json({ message: 'Your current password is incorrect' });
+        }
+
+        // ---- TARGET ----
+        const user = await User.findById(targetId).select('+tokenVersion');
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        user.password = newPassword; // Pre-save hook in User model will hash it
-        user.plainPassword = newPassword;
+        // ---- SERVER-GENERATED PASSWORD ONLY ----
+        const resetPassword = generateTemporaryPassword();
+
+        user.password = resetPassword; // pre-save hook hashes it
+        user.mustChangePassword = true;
+        user.tokenVersion = (user.tokenVersion || 0) + 1; // kill existing sessions
+        user.failedLoginAttempts = 0;
+        user.lockUntil = null;
         await user.save();
 
-        res.status(200).json({
-            message: `Password for "${user.name}" (${user.role}) updated successfully`
+        audit(req, 'password.reset', {
+            targetId: user._id,
+            targetType: 'User',
+            meta: { targetRole: user.role }
+        });
+
+        return res.status(200).json({
+            message: `Password for "${user.name}" (${user.role}) was reset`,
+            mustChangePassword: true,
+            ...buildTemporaryPasswordPayload(resetPassword)
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ OWNERS ] password reset failed:', error.message);
+        return res.status(500).json({ message: 'Unable to reset password' });
     }
 };
 

@@ -1,8 +1,71 @@
+const jwt = require('jsonwebtoken');
 const Property = require('../models/Property');
 const User = require('../models/User');
 const Package = require('../models/Package');
 const Review = require('../models/Review');
 const { generateUniqueSlug } = require('../utils/slugify');
+const { escapeRegex, optionalString } = require('../utils/validate');
+
+// ==========================================
+// OWNER PROJECTION FIELDS
+// ==========================================
+// Public responses expose the owner NAME only. The owner email address is
+// personally identifiable information and must never leave the server on an
+// unauthenticated route.
+const OWNER_FIELDS_PUBLIC = 'name';
+// Manager-authenticated responses keep the previous behaviour (name + email).
+const OWNER_FIELDS_MANAGER = 'name email';
+
+// ==========================================
+// HELPER: IS THIS REQUEST MADE BY A MANAGER?
+// ==========================================
+// GET /api/properties and GET /api/properties/:slug are PUBLIC routes, but the
+// manager dashboard reads them with a bearer token and needs the full record
+// (exact address + owner email) for its edit forms and search.
+// Unauthenticated callers are ALWAYS redacted — a missing/invalid token just
+// means "public view".
+const isManagerRequest = async (req) => {
+    const authHeader = req.headers && req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer')) {
+        return false;
+    }
+    try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id).select('-password');
+        return !!user && user.role === 'manager';
+    } catch (error) {
+        return false;
+    }
+};
+
+// ==========================================
+// HELPER: REDACT A PROPERTY FOR PUBLIC USE
+// ==========================================
+// Removes personally identifiable information from a property payload:
+//  - the exact street address of the property
+//  - every owner contact detail (email / phone / password hash)
+const PUBLIC_REDACTED_PROPERTY_FIELDS = ['address', 'createdBy'];
+const PUBLIC_REDACTED_OWNER_FIELDS = ['email', 'phone', 'password'];
+
+const redactPropertyForPublic = (property) => {
+    if (!property) return property;
+
+    const safeProperty = { ...property };
+    PUBLIC_REDACTED_PROPERTY_FIELDS.forEach(field => {
+        delete safeProperty[field];
+    });
+
+    if (safeProperty.owner && typeof safeProperty.owner === 'object') {
+        const safeOwner = { ...safeProperty.owner };
+        PUBLIC_REDACTED_OWNER_FIELDS.forEach(field => {
+            delete safeOwner[field];
+        });
+        safeProperty.owner = safeOwner;
+    }
+
+    return safeProperty;
+};
 
 // ==========================================
 // HELPER: ENRICH CAMPSITES WITH MIN PACKAGE PRICE
@@ -75,14 +138,16 @@ const enrichPropertiesWithReviews = async (properties) => {
 // @query   type=campsite|villa, location=string, search=string, isActive=true|false
 const getProperties = async (req, res) => {
     try {
-        const {
-            type,
-            location,
-            search,
-            isActive,
-            sortBy,
-            order
-        } = req.query;
+        const type = optionalString(req.query.type, 20);
+        const location = optionalString(req.query.location, 80);
+        const search = optionalString(req.query.search, 120);
+        const isActive = optionalString(req.query.isActive, 10);
+        const sortBy = optionalString(req.query.sortBy, 20);
+        const order = optionalString(req.query.order, 5);
+
+        // Whether the caller is an authenticated manager decides both the
+        // projection (owner email/address) and which filters are allowed.
+        const managerView = await isManagerRequest(req);
 
         // ---- BUILD QUERY OBJECT ----
         let query = {};
@@ -93,37 +158,48 @@ const getProperties = async (req, res) => {
         }
 
         // Filter by location (case-insensitive partial match)
+        // The value is regex-escaped so user input cannot inject operators
+        // such as `.*` or expensive backtracking patterns.
         if (location && location.trim()) {
-            query.location = { $regex: location.trim(), $options: 'i' };
+            query.location = { $regex: escapeRegex(location.trim().slice(0, 80)), $options: 'i' };
         }
 
         // Full-text search across name, location, shortDescription
         if (search && search.trim()) {
-            query.$text = { $search: search.trim() };
+            query.$text = { $search: search.trim().slice(0, 120) };
         }
 
-        // Filter by active status — public API defaults to active only
-        // Manager can pass isActive=all to see ALL properties, or isActive=false for inactive only
-        if (isActive === 'all') {
-            // No isActive filter — return both active and inactive
-        } else if (isActive !== undefined) {
-            query.isActive = isActive === 'true';
+        // Filter by active status — public API always defaults to active only.
+        // `isActive=all` and `isActive=false` are manager-only capabilities;
+        // otherwise a public caller could enumerate unpublished drafts.
+        if (isActive === 'all' || isActive === 'false') {
+            if (managerView) {
+                if (isActive === 'false') query.isActive = false;
+            } else {
+                query.isActive = true;
+            }
+        } else if (isActive === 'true') {
+            query.isActive = true;
         } else {
-            // Default: only show active properties to the public
             query.isActive = true;
         }
 
-        // ---- BUILD SORT ----
+        // ---- BUILD SORT (allow-listed) ----
         let sortOptions = { createdAt: -1 }; // Default: newest first
 
-        if (sortBy) {
-            const sortField = sortBy === 'price' ? 'pricing.weekdayPrice' : sortBy;
+        const SORTABLE_FIELDS = {
+            price: 'pricing.weekdayPrice',
+            createdAt: 'createdAt',
+            name: 'name',
+            updatedAt: 'updatedAt'
+        };
+        if (sortBy && SORTABLE_FIELDS[sortBy]) {
             const sortOrder = order === 'asc' ? 1 : -1;
-            sortOptions = { [sortField]: sortOrder };
+            sortOptions = { [SORTABLE_FIELDS[sortBy]]: sortOrder };
         }
 
         let properties = await Property.find(query)
-            .populate('owner', 'name email')    // Populate basic owner info
+            .populate('owner', managerView ? OWNER_FIELDS_MANAGER : OWNER_FIELDS_PUBLIC)
             .populate('createdBy', 'name')
             .sort(sortOptions)
             .lean();
@@ -131,9 +207,14 @@ const getProperties = async (req, res) => {
         properties = await enrichPropertiesWithMinPrice(properties);
         properties = await enrichPropertiesWithReviews(properties);
 
+        if (!managerView) {
+            properties = properties.map(redactPropertyForPublic);
+        }
+
         res.status(200).json(properties);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ PROPERTY ] request failed:', error.message);
+        return res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -146,8 +227,15 @@ const getProperties = async (req, res) => {
 // @access  Public
 const getPropertyBySlug = async (req, res) => {
     try {
-        let property = await Property.findOne({ slug: req.params.slug })
-            .populate('owner', 'name email')
+        // Unauthenticated callers get the redacted (public) projection.
+        const managerView = await isManagerRequest(req);
+
+        const property = await Property.findOne({
+            slug: req.params.slug,
+            // Unpublished properties must 404 for anonymous visitors.
+            ...(managerView ? {} : { isActive: true })
+        })
+            .populate('owner', managerView ? OWNER_FIELDS_MANAGER : OWNER_FIELDS_PUBLIC)
             .populate('createdBy', 'name')
             .lean();
 
@@ -157,10 +245,12 @@ const getPropertyBySlug = async (req, res) => {
 
         const enriched = await enrichPropertiesWithMinPrice([property]);
         const enrichedWithReviews = await enrichPropertiesWithReviews(enriched);
+        const result = enrichedWithReviews[0];
 
-        res.status(200).json(enrichedWithReviews[0]);
+        res.status(200).json(managerView ? result : redactPropertyForPublic(result));
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ PROPERTY ] request failed:', error.message);
+        return res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -174,7 +264,7 @@ const getPropertyBySlug = async (req, res) => {
 const getPropertyById = async (req, res) => {
     try {
         let property = await Property.findById(req.params.id)
-            .populate('owner', 'name email')
+            .populate('owner', OWNER_FIELDS_MANAGER)
             .populate('createdBy', 'name')
             .lean();
 
@@ -187,7 +277,8 @@ const getPropertyById = async (req, res) => {
 
         res.status(200).json(enrichedWithReviews[0]);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ PROPERTY ] request failed:', error.message);
+        return res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -277,7 +368,8 @@ const createProperty = async (req, res) => {
 
         res.status(201).json(property);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error('[ PROPERTY ] create failed:', error.message);
+        return res.status(400).json({ message: 'Unable to create the property. Please check the submitted values.' });
     }
 };
 
@@ -308,14 +400,54 @@ const updateProperty = async (req, res) => {
             }
         }
 
-        // ---- HANDLE SLUG REGENERATION IF NAME CHANGES ----
-        let updatedFields = { ...req.body };
-        
+        // ---- ALLOW-LISTED UPDATE ----
+        // The previous version spread `req.body` straight into the update,
+        // which let a caller write any schema field (mass assignment),
+        // including `createdBy` and `slug`.
+        const ALLOWED_FIELDS = [
+            'name', 'type', 'shortDescription', 'description', 'location', 'address',
+            'coverImage', 'images', 'amenities', 'maxGuests', 'checkInTime',
+            'checkOutTime', 'rules', 'whatsappNumber', 'isActive'
+        ];
+
+        let updatedFields = {};
+        ALLOWED_FIELDS.forEach((field) => {
+            if (req.body[field] !== undefined) updatedFields[field] = req.body[field];
+        });
+
+        // Array fields must actually be arrays of strings.
+        ['images', 'amenities', 'rules'].forEach((field) => {
+            if (updatedFields[field] !== undefined) {
+                if (!Array.isArray(updatedFields[field])) {
+                    updatedFields[field] = [];
+                } else {
+                    updatedFields[field] = updatedFields[field]
+                        .filter((item) => typeof item === 'string')
+                        .slice(0, 50);
+                }
+            }
+        });
+
+        // ---- OWNER REASSIGNMENT (validated ObjectId or null) ----
+        let requestedOwner;
+        if (req.body.owner !== undefined) {
+            if (req.body.owner === null || req.body.owner === '') {
+                requestedOwner = null;
+            } else if (optionalObjectId(req.body.owner)) {
+                requestedOwner = req.body.owner;
+            } else {
+                return res.status(400).json({ message: 'Invalid owner id' });
+            }
+            updatedFields.owner = requestedOwner;
+        }
+
         const oldOwner = property.owner;
 
-        if (req.body.name && req.body.name.trim() !== property.name) {
-            updatedFields.slug = await generateUniqueSlug(req.body.name.trim(), property._id);
-            updatedFields.name = req.body.name.trim();
+        // ---- HANDLE SLUG REGENERATION IF NAME CHANGES ----
+        const newName = optionalString(req.body.name, 120);
+        if (newName && newName !== property.name) {
+            updatedFields.slug = await generateUniqueSlug(newName, property._id);
+            updatedFields.name = newName;
         }
 
         // ---- HANDLE NESTED PRICING UPDATE ----
@@ -333,21 +465,28 @@ const updateProperty = async (req, res) => {
             req.params.id,
             updatedFields,
             { new: true, runValidators: true }
-        ).populate('owner', 'name email');
+        ).populate('owner', OWNER_FIELDS_MANAGER);
 
         // ---- SYNC OWNER IF CHANGED ----
-        if (req.body.owner !== undefined && String(oldOwner) !== String(req.body.owner)) {
+        if (requestedOwner !== undefined && String(oldOwner) !== String(requestedOwner)) {
             if (oldOwner) {
                 await User.findByIdAndUpdate(oldOwner, { $pull: { properties: property._id } });
             }
-            if (req.body.owner) {
-                await User.findByIdAndUpdate(req.body.owner, { $addToSet: { properties: property._id } });
+            if (requestedOwner) {
+                await User.findByIdAndUpdate(requestedOwner, { $addToSet: { properties: property._id } });
             }
         }
 
+        audit(req, 'property.updated', {
+            targetId: property._id,
+            targetType: 'Property',
+            meta: { fields: Object.keys(updatedFields) }
+        });
+
         res.status(200).json(updatedProperty);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error('[ PROPERTY ] update failed:', error.message);
+        return res.status(400).json({ message: 'Unable to update the property. Please check the submitted values.' });
     }
 };
 
@@ -401,7 +540,8 @@ const deleteProperty = async (req, res) => {
             message: `PROPERTY "${property.name}" AND RELATED RECORDS DELETED SUCCESSFULLY`
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ PROPERTY ] request failed:', error.message);
+        return res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -429,7 +569,8 @@ const togglePropertyStatus = async (req, res) => {
             property: updated
         });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ PROPERTY ] request failed:', error.message);
+        return res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -440,5 +581,6 @@ module.exports = {
     createProperty,
     updateProperty,
     deleteProperty,
-    togglePropertyStatus
+    togglePropertyStatus,
+    redactPropertyForPublic
 };

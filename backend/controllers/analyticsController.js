@@ -92,7 +92,8 @@ const getOverviewAnalytics = async (req, res) => {
             res.status(200).json({ totalBookings: 0, totalGuests: 0, totalNights: 0 });
         }
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -133,7 +134,8 @@ const getFoodAnalytics = async (req, res) => {
             { name: 'Non-Veg', value: nonVegCount }
         ]);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -170,7 +172,8 @@ const getPackageAnalytics = async (req, res) => {
 
         res.status(200).json(formattedResult);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -215,7 +218,8 @@ const getMonthlyAnalytics = async (req, res) => {
 
         res.status(200).json(formattedResult);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -274,7 +278,8 @@ const getPropertyAnalytics = async (req, res) => {
 
         res.status(200).json(result);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -399,7 +404,8 @@ const getOwnerRevenue = async (req, res) => {
 
         res.status(200).json(formattedRevenues);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 

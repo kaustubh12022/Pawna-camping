@@ -37,7 +37,14 @@ const ManagerLogin = () => {
 
             // SAVE TOKEN AND NAVIGATE TO DASHBOARD
             localStorage.setItem('managerToken', data.token);
-            navigate('/manager');
+
+            // A manager-issued temporary password must be replaced before any
+            // other API call is permitted.
+            if (data.mustChangePassword) {
+                navigate('/change-password');
+            } else {
+                navigate('/manager');
+            }
 
         } catch (err) {
             setError(err.message);

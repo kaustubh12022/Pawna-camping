@@ -1,30 +1,85 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// PROTECT ROUTE MIDDLEWARE: VERIFY JWT TOKEN
+// ==========================================
+// PROTECT — VERIFY JWT *AND* SESSION STATE
+// ==========================================
+// A JWT is only as good as its revocation story. Verifying the signature is
+// not enough: a stolen token stays valid until it expires. Every token now
+// carries `tv` (tokenVersion); if it no longer matches the user's current
+// tokenVersion the token is dead. Password changes, manager resets and
+// "log out everywhere" all bump the value.
+//
+// Accounts flagged `mustChangePassword` are confined to /api/auth/* until
+// they set their own password. Without this, a manager-issued temporary
+// password could be used indefinitely.
+// ==========================================
+
+const AUTH_ONLY_PREFIX = '/api/auth/';
+
+const sameTokenVersion = (decoded, user) => {
+    // Tokens minted before tokenVersion existed have no `tv` claim and are
+    // rejected on purpose — one forced re-login after deploy.
+    if (!Number.isInteger(decoded.tv)) return false;
+    return decoded.tv === (user.tokenVersion || 0);
+};
+
 const protect = async (req, res, next) => {
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        try {
-            // GET TOKEN FROM HEADER
-            const token = req.headers.authorization.split(' ')[1];
+    const header = req.headers.authorization;
 
-            // VERIFY TOKEN
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!header || !header.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'Not authorised' });
+    }
 
-            // GET USER FROM THE TOKEN AND EXCLUDE PASSWORD
-            req.user = await User.findById(decoded.id).select('-password');
+    const token = header.slice(7).trim();
+    if (!token) {
+        return res.status(401).json({ message: 'Not authorised' });
+    }
 
-            if (!req.user) {
-                return res.status(401).json({ message: 'NOT AUTHORIZED, USER NOT FOUND' });
-            }
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+            algorithms: ['HS256'] // Pin the algorithm: never accept `none` or RS/HS confusion
+        });
 
-            next();
-        } catch (error) {
-            console.error(`[ ERROR ] TOKEN VERIFICATION FAILED: ${error.message}`);
-            return res.status(401).json({ message: 'NOT AUTHORIZED, TOKEN FAILED' });
+        if (!decoded || typeof decoded.id !== 'string') {
+            return res.status(401).json({ message: 'Not authorised' });
         }
-    } else {
-        return res.status(401).json({ message: 'NOT AUTHORIZED, NO TOKEN PROVIDED' });
+
+        const user = await User.findById(decoded.id)
+            .select('-password +tokenVersion +failedLoginAttempts +lockUntil');
+
+        if (!user) {
+            return res.status(401).json({ message: 'Not authorised' });
+        }
+
+        if (!sameTokenVersion(decoded, user)) {
+            return res.status(401).json({
+                message: 'Session expired. Please sign in again.',
+                code: 'TOKEN_REVOKED'
+            });
+        }
+
+        if (user.isLocked && user.isLocked()) {
+            return res.status(423).json({ message: 'Account temporarily locked' });
+        }
+
+        req.user = user;
+
+        // Confine accounts that still use a manager-issued password.
+        const isAuthRoute = req.originalUrl.startsWith(AUTH_ONLY_PREFIX);
+        if (user.mustChangePassword && !isAuthRoute) {
+            return res.status(403).json({
+                message: 'You must change your password before continuing.',
+                code: 'PASSWORD_CHANGE_REQUIRED'
+            });
+        }
+
+        return next();
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ message: 'Session expired. Please sign in again.', code: 'TOKEN_EXPIRED' });
+        }
+        return res.status(401).json({ message: 'Not authorised' });
     }
 };
 

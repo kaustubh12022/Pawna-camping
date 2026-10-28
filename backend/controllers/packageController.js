@@ -1,4 +1,5 @@
 const Package = require('../models/Package');
+const { optionalObjectId } = require('../utils/validate');
 
 // ==========================================
 // GET ALL PACKAGES (with optional property filter)
@@ -11,7 +12,7 @@ const Package = require('../models/Package');
 //          If no propertyId → returns ALL packages (legacy behaviour preserved)
 const getPackages = async (req, res) => {
     try {
-        const { propertyId } = req.query;
+        const propertyId = optionalObjectId(req.query.propertyId);
 
         let query = {};
 
@@ -31,7 +32,8 @@ const getPackages = async (req, res) => {
 
         res.status(200).json(packages);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ API ] request failed:', error.message);
+        res.status(500).json({ message: 'Unable to process the request' });
     }
 };
 
@@ -97,7 +99,8 @@ const createPackage = async (req, res) => {
         const populated = await newPackage.populate('property', 'name type slug');
         res.status(201).json(populated);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error('[ API ] validation failed:', error.message);
+        res.status(400).json({ message: 'Invalid request data' });
     }
 };
 
@@ -158,7 +161,8 @@ const updatePackage = async (req, res) => {
 
         res.status(200).json(updatedPackage);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error('[ API ] validation failed:', error.message);
+        res.status(400).json({ message: 'Invalid request data' });
     }
 };
 

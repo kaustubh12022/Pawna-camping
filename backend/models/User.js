@@ -17,7 +17,8 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: [true, 'Please add a password']
+        required: [true, 'Please add a password'],
+        select: false // Never returned by default — must be requested explicitly
     },
     role: {
         type: String,
@@ -25,11 +26,11 @@ const userSchema = new mongoose.Schema({
         default: 'manager',
         index: true // Fast filtering by role
     },
-    // PHASE 5: Plain password for manager reference
-    plainPassword: {
-        type: String,
-        select: false // Only selected explicitly in manager routes
-    },
+    // SECURITY: Passwords are NEVER stored in plaintext.
+    // The only persisted secret is the bcrypt hash in `password` above.
+    // When a manager creates or resets an owner account the server generates a
+    // random one-time temporary password, stores ONLY its bcrypt hash, and
+    // returns the plaintext to the manager exactly once (in that response).
     // PHASE 2: Property ownership mapping
     // For owners: list of properties they own/manage
     // For managers: empty array (managers see all properties)
@@ -42,6 +43,13 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    // Flagged when the account still runs on a manager-issued password.
+    // Set to true on owner create / password reset, cleared once the owner
+    // changes the password themselves (see authController.updatePassword).
+    mustChangePassword: {
+        type: Boolean,
+        default: false
+    },
     // PHASE 3: Notification System
     lastSeenBookingAt: {
         type: Date,
@@ -50,24 +58,65 @@ const userSchema = new mongoose.Schema({
     pushSubscription: {
         type: Object, // Stores VAPID subscription object (endpoint, keys)
         default: null
+    },
+
+    // ==========================================
+    // SESSION INVALIDATION
+    // ==========================================
+    // Every JWT embeds the tokenVersion it was issued against. `protect`
+    // rejects any token whose version no longer matches this field, so
+    // changing a password (or "log out everywhere") instantly kills every
+    // previously issued token for that account.
+    tokenVersion: {
+        type: Number,
+        default: 0,
+        select: false
+    },
+
+    // ==========================================
+    // ACCOUNT LOCKOUT (per-account, not per-IP)
+    // ==========================================
+    // IP-based rate limiting alone lets an attacker rotate IPs. These fields
+    // add a per-account brake that is independent of the source address.
+    failedLoginAttempts: {
+        type: Number,
+        default: 0,
+        select: false
+    },
+    lockUntil: {
+        type: Date,
+        default: null,
+        select: false
+    },
+    lastLoginAt: {
+        type: Date,
+        default: null
     }
 }, {
     timestamps: true // THIS AUTOMATICALLY CREATES createdAt AND updatedAt FIELDS
 });
 
 // HASH PASSWORD BEFORE SAVING THE USER TO THE DATABASE
-// Using promise-based async style (no `next` param) — correct for Mongoose 6+
+// Using promise-based async style (no `next` param) — correct for Mongoose 6+.
+// Cost factor 12 (~250-400ms) is the current OWASP-recommended floor for
+// bcrypt and is only paid on login/password change, never per request.
 userSchema.pre('save', async function () {
     if (!this.isModified('password')) {
         return; // Skip hashing if password not changed
     }
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
 });
 
 // MATCH ENTERED PASSWORD TO HASHED PASSWORD IN DATABASE
 userSchema.methods.matchPassword = async function (enteredPassword) {
-    return await bcrypt.compare(enteredPassword, this.password);
+    if (typeof enteredPassword !== 'string' || !this.password) return false;
+    return bcrypt.compare(enteredPassword, this.password);
+};
+
+// TRUE WHEN THE ACCOUNT IS TEMPORARILY LOCKED OUT
+userSchema.methods.isLocked = function () {
+    return Boolean(this.lockUntil && this.lockUntil.getTime() > Date.now());
 };
 
 module.exports = mongoose.model('User', userSchema);

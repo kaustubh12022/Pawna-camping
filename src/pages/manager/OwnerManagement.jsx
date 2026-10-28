@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit3, Trash2, X, Key, Building2, AlertCircle, Mail, Phone, UserPlus, TrendingUp, IndianRupee, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit3, Trash2, X, Key, Building2, AlertCircle, Mail, Phone, UserPlus, TrendingUp, IndianRupee } from 'lucide-react';
 import { API_BASE_URL } from '../../config/api';
 import { useToast } from '../../context/ToastContext';
 
@@ -21,7 +21,9 @@ const OwnerManagement = () => {
     const [assignPropertyIds, setAssignPropertyIds] = useState([]);
     const [formData, setFormData] = useState({ name: '', email: '', password: '', phone: '', propertyIds: [] });
     const [ownerRevenue, setOwnerRevenue] = useState({});
-    const [showPasswords, setShowPasswords] = useState({});
+    // One-time temporary password returned by the create/reset endpoints.
+    // It is shown exactly once and is never stored in the owner list.
+    const [oneTimePassword, setOneTimePassword] = useState(null);
 
     const token = () => localStorage.getItem('managerToken');
     const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
@@ -63,9 +65,17 @@ const OwnerManagement = () => {
         try {
             const res = await fetch(`${API}/api/owners`, { method: 'POST', headers: headers(), body: JSON.stringify(formData) });
             if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
+            const d = await res.json();
             setShowForm(false); setFormData({ name: '', email: '', password: '', phone: '', propertyIds: [] });
             fetchData();
-            toast.success('Owner created successfully');
+            // The server returns a one-time temporary password only when the
+            // manager did not choose one. It is displayed exactly once.
+            if (d.temporaryPassword) {
+                setOneTimePassword({ name: d.name, email: d.email, password: d.temporaryPassword, notice: d.temporaryPasswordNotice });
+                toast.success('Owner created — share the one-time password shown below.');
+            } else {
+                toast.success(d.passwordNotice || 'Owner created successfully');
+            }
         } catch (err) { toast.error(err.message); }
     };
 
@@ -94,15 +104,23 @@ const OwnerManagement = () => {
     };
 
     const handleResetPassword = async () => {
-        if (!newPassword || newPassword.length < 6) return toast.warning('Password must be at least 6 characters');
+        // Step-up authentication: the manager must re-enter their own
+        // password. The new owner password is always generated server-side
+        // and shown exactly once.
+        if (!newPassword) return toast.warning('Enter your own manager password to confirm this reset');
         try {
             const res = await fetch(`${API}/api/owners/${showPasswordReset}/reset-password`, {
-                method: 'PUT', headers: headers(), body: JSON.stringify({ newPassword })
+                method: 'PUT', headers: headers(), body: JSON.stringify({ currentPassword: newPassword })
             });
-            if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
-            // After reset, update the local owner list with the new password so manager sees it immediately
-            setOwners(prev => prev.map(o => o._id === showPasswordReset ? { ...o, plainPassword: newPassword } : o));
-            toast.success('Password updated! The new password is now visible in the owner card.');
+            if (!res.ok) { const d = await res.json(); throw new Error(d.message || 'Reset failed'); }
+            const d = await res.json();
+            setOwners(prev => prev.map(o => o._id === showPasswordReset ? { ...o, mustChangePassword: true } : o));
+            if (d.temporaryPassword) {
+                setOneTimePassword({ name: d.message, email: '', password: d.temporaryPassword, notice: d.temporaryPasswordNotice });
+                toast.success('Password reset — share the one-time password shown below.');
+            } else {
+                toast.success('Password reset successfully.');
+            }
             setShowPasswordReset(null); setNewPassword('');
         } catch (err) { toast.error(err.message); }
     };
@@ -151,6 +169,32 @@ const OwnerManagement = () => {
 
             {error && <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center gap-2"><AlertCircle className="w-4 h-4" />{error}</div>}
 
+            {/* ONE-TIME TEMPORARY PASSWORD — shown once, never stored */}
+            {oneTimePassword && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-start gap-3">
+                    <Key className="mt-0.5 w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                        <p className="font-semibold">One-time temporary password for {oneTimePassword.name}{oneTimePassword.email ? ` (${oneTimePassword.email})` : ''}</p>
+                        <p className="text-xs mt-0.5">{oneTimePassword.notice || 'Share it with the owner securely. It is shown only once and the owner must change it after the first login.'}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <code className="font-mono text-sm font-bold bg-white border border-amber-200 rounded-lg px-3 py-1.5 select-all break-all">{oneTimePassword.password}</code>
+                            <button
+                                onClick={() => {
+                                    if (navigator.clipboard) navigator.clipboard.writeText(oneTimePassword.password);
+                                    toast.success('Temporary password copied');
+                                }}
+                                className="px-2.5 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors"
+                            >
+                                Copy
+                            </button>
+                        </div>
+                    </div>
+                    <button onClick={() => setOneTimePassword(null)} className="p-1 rounded-lg hover:bg-amber-100 text-amber-500 transition-colors" title="Dismiss">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
             {/* OWNERS LIST */}
             {owners.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-stone-100 p-12 text-center text-stone-400 text-sm">No owners yet. Create one to assign properties.</div>
@@ -169,26 +213,15 @@ const OwnerManagement = () => {
                                             <span className="text-xs text-stone-400 flex items-center gap-1"><Mail className="w-3 h-3" />{owner.email}</span>
                                             {owner.phone && <span className="text-xs text-stone-400 flex items-center gap-1"><Phone className="w-3 h-3" />{owner.phone}</span>}
                                         </div>
-                                        {/* PASSWORD DISPLAY */}
+                                        {/* PASSWORD STATUS — the API never returns a stored password */}
                                         <div className="mt-2 flex items-center gap-2 px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded-lg w-fit max-w-full truncate">
                                             <Key className="w-3 h-3 text-amber-600 flex-shrink-0" />
                                             <span className="text-xs font-semibold text-amber-700 mr-1 shrink-0">Password:</span>
-                                            {owner.plainPassword ? (
-                                                <>
-                                                    <span className={`font-mono text-xs font-bold text-amber-900 truncate ${showPasswords[owner._id] ? '' : 'blur-[3px] select-none'}`}>
-                                                        {owner.plainPassword}
-                                                    </span>
-                                                    <button
-                                                        onClick={() => setShowPasswords(p => ({ ...p, [owner._id]: !p[owner._id] }))}
-                                                        className="ml-1 text-amber-600 hover:text-amber-800 transition-colors shrink-0"
-                                                        title={showPasswords[owner._id] ? 'Hide password' : 'Show password'}
-                                                    >
-                                                        {showPasswords[owner._id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <span className="text-xs text-amber-600 italic truncate">Not set — use "Password" button to set one</span>
-                                            )}
+                                            <span className="text-xs text-amber-600 italic truncate">
+                                                {owner.mustChangePassword
+                                                    ? 'Temporary password issued — owner must change it at first login'
+                                                    : 'Set (hidden) — use the "Password" button to issue a new one-time password'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -246,9 +279,12 @@ const OwnerManagement = () => {
                                     </button>
                                 </div>
                                 {showPasswordReset === owner._id && (
-                                    <div className="flex gap-2">
-                                        <input type="text" placeholder="New password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="flex-1 px-3 py-1.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
-                                        <button onClick={handleResetPassword} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors">Save</button>
+                                    <div className="space-y-1.5">
+                                        <div className="flex gap-2">
+                                            <input type="password" placeholder="Your manager password (confirms the reset)" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="flex-1 px-3 py-1.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                                            <button onClick={handleResetPassword} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition-colors">Reset</button>
+                                        </div>
+                                        <p className="text-[11px] text-stone-400">A new one-time password is generated and shown once. The owner must change it at next sign-in.</p>
                                     </div>
                                 )}
                             </div>
@@ -278,9 +314,10 @@ const OwnerManagement = () => {
                             </div>
                             {!editingId && (
                                 <div>
-                                    <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1.5">Password *</label>
-                                    <input type="password" required minLength={6} value={formData.password} onChange={e => setFormData(p => ({ ...p, password: e.target.value }))}
+                                    <label className="text-xs font-semibold text-stone-600 uppercase tracking-wider block mb-1.5">Password</label>
+                                    <input type="password" minLength={6} value={formData.password} onChange={e => setFormData(p => ({ ...p, password: e.target.value }))}
                                         className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                                    <p className="text-xs text-stone-400 mt-1">Optional — leave blank to auto-generate a secure one-time password (shown once after creating).</p>
                                 </div>
                             )}
                             <div>

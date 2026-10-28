@@ -1,45 +1,76 @@
 const Review = require('../models/Review');
 const Property = require('../models/Property');
+const { optionalObjectId, optionalString } = require('../utils/validate');
+
+// ==========================================
+// PUBLIC REVIEW PROJECTION
+// ==========================================
+// Reviewer email and phone are personal data and are never returned on a
+// public endpoint. They remain stored for the manager's own follow-up.
+const PUBLIC_REVIEW_FIELDS = '_id property reviewerName rating text isApproved createdAt updatedAt';
 
 // GET /api/reviews?propertyId=xxx  — public
 const getReviews = async (req, res) => {
     try {
         const filter = { isApproved: true };
-        if (req.query.propertyId) filter.property = req.query.propertyId;
+
+        if (req.query.propertyId !== undefined) {
+            const propertyId = optionalObjectId(req.query.propertyId);
+            if (!propertyId) {
+                return res.status(400).json({ message: 'Invalid property ID' });
+            }
+            filter.property = propertyId;
+        }
 
         const reviews = await Review.find(filter)
+            .select(PUBLIC_REVIEW_FIELDS)
             .populate('property', 'name type')
             .sort({ createdAt: -1 })
             .limit(100)
             .lean();
 
-        res.json(reviews);
+        return res.json(reviews);
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[ REVIEW ] list failed:', err.message);
+        return res.status(500).json({ message: 'Unable to load reviews' });
     }
 };
 
 // GET /api/reviews/:propertyId  — public, by property
 const getReviewsByProperty = async (req, res) => {
     try {
-        const reviews = await Review.find({ property: req.params.propertyId, isApproved: true })
+        const propertyId = optionalObjectId(req.params.propertyId);
+        if (!propertyId) {
+            return res.status(400).json({ message: 'Invalid property ID' });
+        }
+
+        const reviews = await Review.find({ property: propertyId, isApproved: true })
+            .select(PUBLIC_REVIEW_FIELDS)
             .sort({ createdAt: -1 })
+            .limit(100)
             .lean();
-        res.json(reviews);
+
+        return res.json(reviews);
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[ REVIEW ] by-property failed:', err.message);
+        return res.status(500).json({ message: 'Unable to load reviews' });
     }
 };
 
 // POST /api/reviews  — public (rate-limited at server level)
 const createReview = async (req, res) => {
     try {
-        const { property, reviewerName, rating, text, reviewerEmail, reviewerPhone } = req.body;
+        const { property, rating } = req.body;
+        const reviewerName = optionalString(req.body.reviewerName, 80);
+        const text = optionalString(req.body.text, 1000);
+        const reviewerEmail = optionalString(req.body.reviewerEmail, 254);
+        const reviewerPhone = optionalString(req.body.reviewerPhone, 20);
+
         if (!property || !reviewerName || !rating || !text) {
             return res.status(400).json({ message: 'All fields are required' });
         }
 
-        if (typeof reviewerName !== 'string' || reviewerName.trim().length < 2) {
+        if (reviewerName.length < 2) {
             return res.status(400).json({ message: 'Reviewer name must be at least 2 characters' });
         }
 
@@ -48,22 +79,41 @@ const createReview = async (req, res) => {
             return res.status(400).json({ message: 'Rating must be an integer between 1 and 5' });
         }
 
-        if (typeof text !== 'string' || text.trim().length < 10 || text.trim().length > 1000) {
+        if (text.length < 10) {
             return res.status(400).json({ message: 'Review text must be between 10 and 1000 characters' });
         }
-        // Validate property exists (Handle invalid ObjectIds gracefully)
-        const mongoose = require('mongoose');
-        if (!mongoose.Types.ObjectId.isValid(property)) {
+
+        // Validate property exists (handle invalid ObjectIds gracefully)
+        const propertyId = optionalObjectId(property);
+        if (!propertyId) {
             return res.status(400).json({ message: 'Invalid property ID' });
         }
-        
-        const exists = await Property.findById(property).select('_id').lean();
+
+        const exists = await Property.findById(propertyId).select('_id').lean();
         if (!exists) return res.status(404).json({ message: 'Property not found' });
 
-        const review = await Review.create({ property, reviewerName, rating, text, reviewerEmail, reviewerPhone });
-        res.status(201).json(review);
+        const review = await Review.create({
+            property: propertyId,
+            reviewerName,
+            rating: numericRating,
+            text,
+            reviewerEmail: reviewerEmail || undefined,
+            reviewerPhone: reviewerPhone || undefined
+        });
+
+        // Return only the public projection — never echo contact details back.
+        return res.status(201).json({
+            _id: review._id,
+            property: review.property,
+            reviewerName: review.reviewerName,
+            rating: review.rating,
+            text: review.text,
+            isApproved: review.isApproved,
+            createdAt: review.createdAt
+        });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[ REVIEW ] create failed:', err.message);
+        return res.status(500).json({ message: 'Unable to submit the review' });
     }
 };
 
@@ -80,7 +130,8 @@ const deleteReview = async (req, res) => {
         
         res.json({ message: 'Deleted' });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[ REVIEW ] request failed:', err.message);
+        return res.status(500).json({ message: 'Unable to process the review request' });
     }
 };
 
@@ -93,7 +144,8 @@ const getPendingReviews = async (req, res) => {
             .lean();
         res.json(reviews);
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[ REVIEW ] request failed:', err.message);
+        return res.status(500).json({ message: 'Unable to process the review request' });
     }
 };
 
@@ -113,7 +165,8 @@ const approveReview = async (req, res) => {
 
         res.json(review);
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        console.error('[ REVIEW ] request failed:', err.message);
+        return res.status(500).json({ message: 'Unable to process the review request' });
     }
 };
 

@@ -14,6 +14,7 @@ import {
     ChevronDown,
     LogOut,
     Building2,
+    KeyRound,
     PieChart as PieChartIcon
 } from 'lucide-react';
 import PackageManagement from './manager/PackageManagement';
@@ -271,6 +272,13 @@ const OwnerDashboard = () => {
                     <div className="lg:hidden flex items-center gap-2">
                         <ManualInstallButton />
                         <button
+                            onClick={() => navigate('/change-password')}
+                            className="p-2 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                            title="Change Password"
+                        >
+                            <KeyRound className="w-5 h-5" />
+                        </button>
+                        <button
                             onClick={handleLogout}
                             className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
                             title="Sign Out"
@@ -318,6 +326,13 @@ const OwnerDashboard = () => {
 
                     <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
                         <ManualInstallButton />
+                        <button
+                            onClick={() => navigate('/change-password')}
+                            className="p-2 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                            title="Change Password"
+                        >
+                            <KeyRound className="w-5 h-5" />
+                        </button>
                         <button
                             onClick={handleLogout}
                             className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"

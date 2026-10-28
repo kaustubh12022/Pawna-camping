@@ -3,6 +3,14 @@ const Package = require('../models/Package');
 const Property = require('../models/Property');
 const BlockedDate = require('../models/BlockedDate');
 const Revenue = require('../models/Revenue');
+const { audit } = require('../utils/audit');
+const {
+    optionalString,
+    optionalInt,
+    optionalNumber,
+    optionalObjectId,
+    parsePagination
+} = require('../utils/validate');
 
 // ==========================================
 // CAPACITY VALIDATION LOGIC
@@ -12,7 +20,7 @@ const Revenue = require('../models/Revenue');
 // - If no propertyId: fallback to old global lookup by package title (preserves live site behaviour)
 const checkCapacityOverlap = async (packageType, checkIn, checkOut, propertyId = null, propertyType = null) => {
     let maxCapacity = 0;
-    
+
     // IF VILLA: The whole property is booked at once, so maxCapacity = 1
     if (propertyType === 'villa') {
         maxCapacity = 1;
@@ -32,7 +40,10 @@ const checkCapacityOverlap = async (packageType, checkIn, checkOut, propertyId =
         if (pkg && pkg.maxCapacity > 0) {
             maxCapacity = pkg.maxCapacity;
         } else {
-            return true; // Unlimited or not found — allow booking
+            // SECURITY: a package we cannot resolve has no known capacity.
+            // The previous version returned `true` here, which silently
+            // allowed unlimited overbooking for any unrecognised packageType.
+            return false;
         }
     }
 
@@ -117,124 +128,206 @@ const calculateServerTotalPrice = async ({ property, propertyType, packageType, 
 // @desc    CREATE NEW BOOKING (public + manager)
 // @route   POST /api/bookings
 // @access  Public (anonymous guests) — no auth required
+// ---------------------------------------------------------------
+// PRICING IS SERVER-AUTHORITATIVE
+//  * The browser no longer has any influence over the amount stored.
+//  * The previous version accepted `totalPrice` from the request and only
+//    overrode it when the server could compute a price > 0. Sending an
+//    unknown `packageType` made the server compute 0, so the client value
+//    (₹1) was persisted. Any unrecognised input now rejects the booking.
+//  * A manager override exists, but it must be explicit (`overridePrice`)
+//    and is only reachable on the authenticated manager route.
+// ---------------------------------------------------------------
 const createBooking = async (req, res) => {
     try {
-        const {
-            packageType,
-            checkIn,
-            checkOut,
-            guests,
-            vegGuests,
-            nonVegGuests,
-            foodPreference,
-            customerName,
-            customerPhone,
-            customerEmail,
-            totalPrice,     // PHASE 2: Accept calculated total price
-            propertyId,      // PHASE 2: Optional — null for legacy bookings
-            botField        // Spam prevention honeypot
-        } = req.body;
+        const isManager = req.user && req.user.role === 'manager';
 
-        // SPAM PREVENTION (Honeypot)
-        if (botField) {
-            // A bot filled in the hidden field
-            return res.status(400).json({ message: 'Invalid request payload' });
+        const packageType = optionalString(req.body?.packageType, 80);
+        const customerName = optionalString(req.body?.customerName, 100);
+        const customerEmail = optionalString(req.body?.customerEmail, 254);
+        const foodPreference = optionalString(req.body?.foodPreference, 10);
+        const propertyId = optionalObjectId(req.body?.propertyId);
+
+        // ---- SPAM PREVENTION (Honeypot) ----
+        // Silent success: a bot should not learn that it was detected.
+        if (req.body?.botField) {
+            return res.status(201).json({ message: 'Booking received' });
         }
 
-        // PHONE NUMBER FORMAT VALIDATION (10-digit Indian format /^[6-9]\d{9}$/)
-        const cleanPhone = (customerPhone || '').toString().replace(/[\s+-]/g, '');
-        const normalizedPhone = cleanPhone.length > 10 && cleanPhone.startsWith('91') ? cleanPhone.slice(2) : cleanPhone;
+        // ---- REQUIRED FIELDS ----
+        if (!customerName || customerName.length < 2) {
+            return res.status(400).json({ message: 'Please enter your full name' });
+        }
+        if (!packageType) {
+            return res.status(400).json({ message: 'Please select a package' });
+        }
+        if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+            return res.status(400).json({ message: 'Please enter a valid email address' });
+        }
+
+        // ---- PHONE NUMBER (10-digit Indian format) ----
+        const rawPhone = req.body?.customerPhone;
+        if (typeof rawPhone !== 'string' && typeof rawPhone !== 'number') {
+            return res.status(400).json({ message: 'Please enter a valid phone number' });
+        }
+        const cleanPhone = String(rawPhone).replace(/[\s+-]/g, '');
+        const normalizedPhone = cleanPhone.length > 10 && cleanPhone.startsWith('91')
+            ? cleanPhone.slice(2)
+            : cleanPhone;
         if (!/^[6-9]\d{9}$/.test(normalizedPhone)) {
             return res.status(400).json({ message: 'Please enter a valid 10-digit Indian phone number starting with 6-9' });
         }
 
-        // PAST DATE VALIDATION
+        // ---- DATES ----
+        const checkInDate = new Date(req.body?.checkIn);
+        const checkOutDate = new Date(req.body?.checkOut);
+        if (Number.isNaN(checkInDate.getTime()) || Number.isNaN(checkOutDate.getTime())) {
+            return res.status(400).json({ message: 'Please select valid check-in and check-out dates' });
+        }
+        checkInDate.setHours(0, 0, 0, 0);
+        checkOutDate.setHours(0, 0, 0, 0);
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const checkInDate = new Date(checkIn);
-        checkInDate.setHours(0, 0, 0, 0);
         if (checkInDate < today) {
             return res.status(400).json({ message: 'Check-in date cannot be in the past' });
         }
 
-        // PHASE 2: Resolve property and propertyType if propertyId is given
+        const nights = Math.round((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+        if (nights < 1) {
+            return res.status(400).json({ message: 'Check-out must be at least one night after check-in' });
+        }
+        if (nights > 30) {
+            return res.status(400).json({ message: 'Bookings longer than 30 nights must be arranged with the host' });
+        }
+        if (checkInDate.getTime() - today.getTime() > 365 * 24 * 60 * 60 * 1000) {
+            return res.status(400).json({ message: 'Bookings can only be made up to one year in advance' });
+        }
+
+        // ---- GUESTS ----
+        const guests = optionalInt(req.body?.guests, { min: 1, max: 100 });
+        if (guests === null) {
+            return res.status(400).json({ message: 'Please enter a valid number of guests' });
+        }
+
+        const vegGuests = optionalInt(req.body?.vegGuests, { min: 0, max: 100 }) ?? 0;
+        const nonVegGuests = optionalInt(req.body?.nonVegGuests, { min: 0, max: 100 }) ?? 0;
+
+        // ---- PROPERTY (required for every public booking) ----
         let propertyRef = null;
         let propertyType = null;
         let propertyDoc = null;
 
+        if (!propertyId && !isManager) {
+            return res.status(400).json({ message: 'Please select a property before booking' });
+        }
+
         if (propertyId) {
             propertyDoc = await Property.findById(propertyId);
             if (!propertyDoc) {
-                return res.status(400).json({ message: 'Invalid propertyId — property not found' });
+                return res.status(404).json({ message: 'Property not found' });
+            }
+            if (!isManager && propertyDoc.isActive === false) {
+                return res.status(404).json({ message: 'This property is not currently accepting bookings' });
             }
             propertyRef = propertyDoc._id;
-            propertyType = propertyDoc.type; // 'campsite' or 'villa'
+            propertyType = propertyDoc.type;
 
-            // CAPACITY CHECK: Validate guests against property.maxGuests
-            if (propertyDoc.maxGuests && Number(guests) > propertyDoc.maxGuests) {
+            if (propertyDoc.maxGuests && guests > propertyDoc.maxGuests) {
                 return res.status(400).json({
-                    message: `Number of guests (${guests}) exceeds maximum capacity of ${propertyDoc.maxGuests} for this property`
+                    message: `Number of guests (${guests}) exceeds the maximum capacity of ${propertyDoc.maxGuests} for this property`
                 });
             }
         }
 
-        // PHASE 5E: BLOCKED DATES CHECK (Fixed single-day overlap with $gte)
+        // ---- PACKAGE RESOLUTION (strict) ----
+        // A campsite booking is only valid against a package that exists for
+        // that property (or a global legacy package). Villas are priced from
+        // the property itself.
+        const isVilla = propertyType === 'villa' || packageType === 'Villa Booking';
+        let resolvedPackage = null;
+
+        if (!isVilla && propertyRef) {
+            resolvedPackage = await Package.findOne({
+                title: packageType,
+                $or: [{ property: propertyRef }, { property: null }]
+            });
+
+            if (!resolvedPackage) {
+                // Legacy fallback: global packages created before multi-property support.
+                resolvedPackage = await Package.findOne({ title: packageType });
+            }
+
+            if (!resolvedPackage) {
+                return res.status(400).json({ message: 'The selected package is no longer available' });
+            }
+        }
+
+        // ---- BLOCKED DATES ----
         if (propertyRef) {
             const blocked = await BlockedDate.findOne({
                 property: propertyRef,
                 $and: [
-                    { startDate: { $lt: new Date(checkOut) } },
-                    { endDate: { $gte: new Date(checkIn) } }
+                    { startDate: { $lt: checkOutDate } },
+                    { endDate: { $gte: checkInDate } }
                 ]
             });
-            
+
             if (blocked) {
-                return res.status(400).json({
-                    message: 'Sorry, these dates are already booked.'
-                });
+                return res.status(409).json({ message: 'Sorry, these dates are already booked.' });
             }
         }
 
-        // CAPACITY CHECK — pass propertyId for scoped check if available
-        const hasCapacity = await checkCapacityOverlap(packageType, checkIn, checkOut, propertyRef, propertyType);
+        // ---- CAPACITY ----
+        const hasCapacity = await checkCapacityOverlap(
+            packageType,
+            checkInDate,
+            checkOutDate,
+            propertyRef,
+            propertyType
+        );
         if (!hasCapacity) {
-            return res.status(400).json({
-                message: 'Selected package is fully booked for these dates.'
-            });
+            return res.status(409).json({ message: 'The selected package is fully booked for these dates.' });
         }
 
-        // SERVER-SIDE TOTAL PRICE CALCULATION & VERIFICATION
-        let finalPrice = Number(totalPrice) || 0;
-        if (propertyDoc) {
+        // ---- AUTHORITATIVE PRICE ----
+        // `req.body.totalPrice` is only read on the authenticated manager
+        // route, and only when the caller explicitly opts into an override.
+        let finalPrice = 0;
+
+        const managerOverride = isManager
+            && req.body?.overridePrice === true
+            && optionalNumber(req.body?.totalPrice, { min: 0, max: 10000000 }) !== null;
+
+        if (managerOverride) {
+            finalPrice = optionalNumber(req.body.totalPrice, { min: 0, max: 10000000 });
+        } else {
             const calculatedServerPrice = await calculateServerTotalPrice({
                 property: propertyDoc,
                 propertyType,
                 packageType,
-                checkIn,
-                checkOut,
-                guests: Number(guests)
+                checkIn: checkInDate,
+                checkOut: checkOutDate,
+                guests
             });
 
-            if (calculatedServerPrice > 0) {
-                const isManager = req.user && req.user.role === 'manager';
-                // Public users or submissions with 0/tampered price are strictly overridden
-                if (!isManager || !totalPrice) {
-                    finalPrice = calculatedServerPrice;
-                }
+            if (!Number.isFinite(calculatedServerPrice) || calculatedServerPrice <= 0) {
+                return res.status(409).json({
+                    message: 'Pricing for this stay is not available. Please contact us to complete the booking.'
+                });
             }
+
+            finalPrice = Math.round(calculatedServerPrice);
+        }
+
+        if (finalPrice > 10000000) {
+            return res.status(400).json({ message: 'The calculated amount is unexpectedly high. Please contact us.' });
         }
 
         // CAMPSITE MEAL COUNT PARITY
-        // Defensive check: meal counts cannot be negative
-        if (!(Number(vegGuests || 0) >= 0 && Number(nonVegGuests || 0) >= 0)) {
-            return res.status(400).json({ message: 'Meal counts cannot be negative' });
-        }
-
-        // For campsites, veg + non-veg meals must equal the guest count
-        const isVilla = propertyType === 'villa' || packageType === 'Villa Booking';
         if (!isVilla) {
-            const totalMeals = (Number(vegGuests) || 0) + (Number(nonVegGuests) || 0);
-            if (totalMeals !== Number(guests)) {
+            const totalMeals = vegGuests + nonVegGuests;
+            if (totalMeals !== guests) {
                 return res.status(400).json({
                     message: `Total veg and non-veg meals (${totalMeals}) must match the number of guests (${guests})`
                 });
@@ -244,19 +337,31 @@ const createBooking = async (req, res) => {
         // CREATE BOOKING
         const booking = await Booking.create({
             packageType: isVilla ? 'Villa Booking' : packageType,
-            checkIn,
-            checkOut,
+            checkIn: checkInDate,
+            checkOut: checkOutDate,
             guests,
-            vegGuests: isVilla ? 0 : (vegGuests || 0),
-            nonVegGuests: isVilla ? 0 : (nonVegGuests || 0),
-            foodPreference: isVilla ? undefined : foodPreference,
+            vegGuests: isVilla ? 0 : vegGuests,
+            nonVegGuests: isVilla ? 0 : nonVegGuests,
+            foodPreference: isVilla ? undefined : (['Veg', 'Non-Veg', 'N/A'].includes(foodPreference) ? foodPreference : undefined),
             customerName,
             customerPhone: normalizedPhone,
-            customerEmail: customerEmail ? customerEmail.trim() : undefined,
+            customerEmail: customerEmail || undefined,
             totalPrice: finalPrice,
             addedBy: req.user ? req.user._id : undefined,
             property: propertyRef,
             propertyType: propertyType
+        });
+
+        audit(req, 'booking.created', {
+            targetId: booking._id,
+            targetType: 'Booking',
+            meta: {
+                propertyId: propertyRef ? String(propertyRef) : null,
+                totalPrice: finalPrice,
+                nights,
+                guests,
+                managerOverride
+            }
         });
 
         // SEND PUSH NOTIFICATION TO OWNERS
@@ -293,7 +398,8 @@ const createBooking = async (req, res) => {
 
         res.status(201).json(booking);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error('[ BOOKING ] create failed:', error.message);
+        return res.status(500).json({ message: 'Unable to create the booking right now. Please try again.' });
     }
 };
 
@@ -307,15 +413,22 @@ const createBooking = async (req, res) => {
 // @query   startDate, endDate, status, propertyId
 const getAllBookings = async (req, res) => {
     try {
-        const { startDate, endDate, status, propertyId } = req.query;
+        const startDate = optionalString(req.query.startDate, 40);
+        const endDate = optionalString(req.query.endDate, 40);
+        const status = optionalString(req.query.status, 20);
+        const propertyId = optionalObjectId(req.query.propertyId);
+        const { page, limit, skip } = parsePagination(req.query, { defaultLimit: 100, maxLimit: 500 });
+
         let query = {};
 
         // FILTER: Date range
         if (startDate && endDate) {
-            query.checkIn = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
+            const from = new Date(startDate);
+            const to = new Date(endDate);
+            if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+                return res.status(400).json({ message: 'Invalid date range' });
+            }
+            query.checkIn = { $gte: from, $lte: to };
         }
 
         // FILTER: Status (pending/confirmed/cancelled)
@@ -333,30 +446,37 @@ const getAllBookings = async (req, res) => {
         if (req.user && req.user.role === 'owner') {
             const ownerPropertyIds = req.user.properties || [];
             if (ownerPropertyIds.length === 0) {
-                // Owner has no properties assigned — return empty
+                res.set('X-Total-Count', '0');
                 return res.status(200).json([]);
             }
-            // Intersect: if propertyId filter given, validate it's one of theirs
             if (propertyId) {
                 const isOwnProperty = ownerPropertyIds.some(p => p.toString() === propertyId);
                 if (!isOwnProperty) {
                     return res.status(403).json({ message: 'ACCESS DENIED: Not your property' });
                 }
             } else {
-                // No propertyId given — scope to all their properties
                 query.property = { $in: ownerPropertyIds };
             }
         }
 
+        const total = await Booking.countDocuments(query);
         const bookings = await Booking.find(query)
             .populate('addedBy', 'name email')
             .populate('property', 'name type slug') // PHASE 2: Populate property info
             .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
             .lean();
 
+        // Kept as a bare array for backwards compatibility with the current
+        // dashboard, with pagination metadata in headers.
+        res.set('X-Total-Count', String(total));
+        res.set('X-Page', String(page));
+        res.set('X-Page-Limit', String(limit));
         res.status(200).json(bookings);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ BOOKING ] list failed:', error.message);
+        return res.status(500).json({ message: 'Unable to load bookings' });
     }
 };
 
@@ -369,11 +489,14 @@ const getAllBookings = async (req, res) => {
 // @access  Private (Manager Only)
 const updateBookingStatus = async (req, res) => {
     try {
-        const { status, amount, commission } = req.body;
+        const { status } = req.body;
 
         if (!['confirmed', 'cancelled'].includes(status)) {
             return res.status(400).json({ message: 'INVALID STATUS SUPPLIED' });
         }
+
+        const amount = optionalNumber(req.body?.amount, { min: 0, max: 10000000 });
+        const commission = optionalNumber(req.body?.commission, { min: 0, max: 10000000 });
 
         const booking = await Booking.findById(req.params.id);
 
@@ -419,7 +542,7 @@ const updateBookingStatus = async (req, res) => {
             }
 
             // Create Revenue if amounts are provided
-            if (amount !== undefined && commission !== undefined && booking.property) {
+            if (amount !== null && commission !== null && booking.property) {
                 await Revenue.create({
                     property: booking.property,
                     bookingRef: booking._id,
@@ -434,6 +557,11 @@ const updateBookingStatus = async (req, res) => {
 
         booking.status = status;
         const updatedBooking = await booking.save();
+        audit(req, 'booking.status_changed', {
+            targetId: booking._id,
+            targetType: 'Booking',
+            meta: { status }
+        });
 
         // PHASE 5D: Push notification to owner on confirm
         if (status === 'confirmed' && booking.property) {
@@ -466,7 +594,8 @@ const updateBookingStatus = async (req, res) => {
 
         res.status(200).json(updatedBooking);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ BOOKING ] status update failed:', error.message);
+        return res.status(500).json({ message: 'Unable to update the booking' });
     }
 };
 
@@ -537,7 +666,8 @@ const ownerRespondToBooking = async (req, res) => {
         const updatedBooking = await booking.save();
         res.status(200).json(updatedBooking);
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ BOOKING ] owner response failed:', error.message);
+        return res.status(500).json({ message: 'Unable to record your response' });
     }
 };
 
@@ -559,7 +689,8 @@ const deleteBooking = async (req, res) => {
         await booking.deleteOne();
         res.status(200).json({ id: req.params.id, message: 'BOOKING DELETED SUCCESSFULLY' });
     } catch (error) {
-        res.status(500).json({ message: `SERVER ERROR: ${error.message}` });
+        console.error('[ BOOKING ] delete failed:', error.message);
+        return res.status(500).json({ message: 'Unable to delete the booking' });
     }
 };
 
